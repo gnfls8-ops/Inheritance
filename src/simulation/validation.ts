@@ -11,6 +11,14 @@ export function validateSnapshot(s:SimulationSnapshot):void {
  if(!object(t.culture)||!number(t.culture.cooperation,0,100)||!number(t.culture.tradition,0,100)||!number(t.nextHuman,13)||!number(t.births)||!number(t.deaths)||!object(t.last)||!Array.isArray(t.events))fail();
  if(Object.values(t.last).some(v=>!number(v)))fail();
  for(const e of [...t.events,...(t.pending?[t.pending]:[])])if(!e||typeof e.id!=='string'||typeof e.title!=='string'||!number(e.day,0,s.world.day)||typeof e.important!=='boolean')fail();
+ if(!object(t.requestUntil)||Object.values(t.requestUntil).some(v=>!number(v)))fail();
+ const legacy=s.world.legacy;
+ if(!legacy||!object(legacy.people)||!Array.isArray(legacy.transmissions))fail();
+ for(const person of Object.values(legacy.people)){
+  if(!person||typeof person.name!=='string'||!Array.isArray(person.entries))fail();
+  for(const e of person.entries)if(!e||!number(e.day,0,s.world.day)||typeof e.text!=='string')fail();
+ }
+ for(const e of legacy.transmissions)if(!e||!['fire','stone','storage'].includes(e.technology)||!number(e.day,0,s.world.day)||typeof e.fromName!=='string'||typeof e.toName!=='string')fail();
  const ids=new Set<string>();
  for(const h of s.world.humans){
   if(!h||typeof h.id!=='string'||ids.has(h.id)||typeof h.name!=='string'||typeof h.alive!=='boolean'||!number(h.ageDays)||!number(h.food)||!h.position)fail();ids.add(h.id);
@@ -19,11 +27,14 @@ export function validateSnapshot(s:SimulationSnapshot):void {
   if(!Array.isArray(h.path)||h.path.some(v=>!v||!Number.isInteger(v.x)||!number(v.x,0,47)||!Number.isInteger(v.y)||!number(v.y,0,47)))fail();
   if(!Array.isArray(h.knowledge)||h.knowledge.some(v=>!['fire','stone','storage'].includes(v))||!Array.isArray(h.visited)||!object(h.relationships)||!object(h.learnedAt))fail();
   if(!['auto','player'].includes(h.control)||!['idle','move','gather','explore','rest','socialize'].includes(h.action))fail();
+  if(!object(h.socialCooldown)||Object.values(h.socialCooldown).some(v=>!number(v))||(h.deathCause!==null&&typeof h.deathCause!=='string'))fail();
+  if(h.command&&(!['queued','progress','completed','failed','cancelled'].includes(h.command.status)||typeof h.command.text!=='string'||!number(h.command.day,0,s.world.day)))fail();
   if(h.techOrder&&(!['experiment','teach'].includes(h.techOrder.kind)||!['fire','stone','storage'].includes(h.techOrder.id)))fail();
   for(const r of Object.values(h.relationships))if(!r||!number(r.trust,0,100)||!number(r.familiarity,0,100))fail();
  }
  if(p.phase==='playing'&&!s.world.humans.some(h=>h.id===p.humanId&&h.alive))fail();
  if(['summary','successor'].includes(p.phase)&&(!p.summary||!number(p.summary.diedDay)||!Array.isArray(p.summary.knowledge)))fail();
+ if(['summary','successor'].includes(p.phase)&&s.world.humans.some(h=>h.id===p.humanId&&h.alive))fail();
  if(t.mode==='history'&&p.phase!=='successor')fail();
  for(const id of ['fire','stone','storage'] as const){const k=s.world.technologies?.[id];if(!k||!number(k.holders)||typeof k.adopted!=='boolean'||typeof k.everDiscovered!=='boolean')fail();}
 }

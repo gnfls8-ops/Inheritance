@@ -1,0 +1,21 @@
+{
+  "mobileEmulation": "390x844 DPR 2 Chromium / SwiftShader",
+  "renderTiming": {
+    "frames": 559,
+    "seconds": 10.013400000000187,
+    "p95ms": 33.20000000000073
+  },
+  "historyDays": 120451,
+  "historyWallSeconds": 21.78,
+  "births": 123,
+  "deaths": 106,
+  "transmissions": 252,
+  "errors": [],
+  "checks": [
+    "autosave reload",
+    "corrupt primary recovery",
+    "audio running/suspended",
+    "CDP two-finger pinch without game command",
+    "real-clock 300-year history"
+  ]
+}

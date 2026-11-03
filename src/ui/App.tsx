@@ -1,86 +1,116 @@
+import {browserSave,writeAutosave} from './persistence';
+import {WorldAudio} from './WorldAudio';
+import {useEffect,useRef,useState} from 'react';
+import {Simulation} from '../simulation/Simulation';
+import {GameClock} from '../simulation/clock';
 import {TIME_MODES} from '../simulation/time';
 import type {TimeMode} from '../simulation/time';
-import { TECHNOLOGIES, canExperiment } from '../simulation/technology';
-import type { TechOrder } from '../simulation/technology';
-import { useEffect, useRef, useState } from 'react';
-import { Simulation } from '../simulation/Simulation';
-import { GameClock } from '../simulation/clock';
-import { WorldMap } from './WorldMap';
-import type { Point } from '../simulation/map';
-import { ACTION_LABELS } from '../simulation/human';
-import type { Activity, Speed } from '../simulation/model';
+import {TECHNOLOGIES,canExperiment} from '../simulation/technology';
+import type {TechnologyId,TechOrder} from '../simulation/technology';
+import {calendar,nameOf,years} from '../simulation/chronicle';
+import {ACTION_LABELS} from '../simulation/human';
+import type {Activity,HumanState,Speed} from '../simulation/model';
+import type {Point} from '../simulation/map';
+import {WorldMap} from './WorldMap';
 
-export function App() {
-  const [initialSimulation] = useState(() => new Simulation());
-  const simulation = useRef(initialSimulation);
-  const clock = useRef(new GameClock());
-  const [world, setWorld] = useState(() => simulation.current.snapshot());
-  const [paused, setPaused] = useState(true);
-  const [speed, setSpeed] = useState<Speed>(1);
-  const [seed, setSeed] = useState('2026');
-  const [error, setError] = useState('');
-  const [help, setHelp] = useState(false);
-  const [retiring,setRetiring]=useState(false);
-  const [selected,setSelected]=useState<string|null>(null);
-  const [message,setMessage]=useState('인물을 선택한 뒤 땅을 누르면 이동을 예약합니다.');
-  const human=world.world.humans.find(h=>h.id===selected);
-  const player=world.world.humans.find(h=>h.id===world.player.humanId);
-  const isPlayer=world.player.phase==='playing'&&selected===world.player.humanId;
-  function choose(id:string){if(simulation.current.choosePlayer(id)){pause(true);setSelected(id);setWorld(simulation.current.snapshot());setMessage('이 인간의 삶을 시작합니다. 다른 사람은 관찰만 가능합니다.');}}
-  function requestFood(){if(!selected)return;const result=simulation.current.requestFood(selected);setMessage(result==='accepted'?'식량 나눔 부탁을 수락했습니다.':result==='refused'?'식량 나눔 부탁을 거절했습니다.':'살아 있는 플레이어가 3칸 이내에 있어야 합니다.');setWorld(simulation.current.snapshot());}
-  function move(target:Point) {
-    if(!isPlayer||!selected){setMessage('NPC는 관찰만 가능합니다. 내 캐릭터로 돌아와 이동하세요.');return;}
-    const ok=simulation.current.move(selected,target);
-    setMessage(ok ? `(${target.x}, ${target.y}) 이동 예약 · 재생하면 하루에 한 칸 이동합니다.` : '이동할 수 없는 지형이거나 경로가 없습니다.');
-    if(ok)setWorld(simulation.current.snapshot());
-  }
-  function act(action:Activity) {
-    if(!selected||!isPlayer)return;
-    const ok=simulation.current.act(selected,action);
-    setMessage(ok ? `${ACTION_LABELS[action]} 지시 예약 · 완료 후 자율 행동으로 복귀합니다.` : '주변에 도달 가능한 자원 또는 교류 상대가 없습니다.');
-    if(ok)setWorld(simulation.current.snapshot());
-  }
-  function technology(order:TechOrder){if(!selected||!isPlayer)return;const ok=simulation.current.technology(selected,order);setMessage(ok?'지시가 예약됐습니다. 시간을 재생하세요.':'기술 조건을 확인하세요.');if(ok)setWorld(simulation.current.snapshot());}
-  function cancel() {
-    if(selected&&simulation.current.resumeAuto(selected)){setWorld(simulation.current.snapshot());setMessage('지시를 취소하고 자율 행동으로 복귀했습니다.');}
-  }
-  function pause(value: boolean) { if(!value&&!simulation.current.canAdvance())return; clock.current.setPaused(value); setPaused(value); }
-  useEffect(() => {
-    let previous = performance.now();
-    let frame = 0;
-    const update = (now: number) => {
-      // A queued RAF timestamp can predate effect/visibility initialization.
-      const ticks = clock.current.advance(Math.max(0, now - previous), () => {simulation.current.advance();return simulation.current.canAdvance();});
-      previous = now;
-      if (ticks) {const next=simulation.current.snapshot();setWorld(next);if(!simulation.current.canAdvance())pause(true);}
-      frame = requestAnimationFrame(update);
-    };
-    const onVisibility = () => { previous = performance.now(); if (document.hidden) pause(true); };
-    document.addEventListener('visibilitychange', onVisibility);
-    frame = requestAnimationFrame(update);
-    return () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', onVisibility); };
-  }, []);
-  function changeMode(mode:TimeMode){pause(true);if(simulation.current.setMode(mode))setWorld(simulation.current.snapshot());}
-  function exportSave(){const blob=new Blob([JSON.stringify(simulation.current.snapshot())],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='inheritance-save-v2.json';a.click();URL.revokeObjectURL(url);}
-  async function importSave(file:File|undefined){if(!file)return;pause(true);try{const restored=Simulation.restore(JSON.parse(await file.text()));simulation.current=restored;setWorld(restored.snapshot());setSelected(restored.snapshot().player.humanId);setSeed(String(restored.snapshot().seed));setRetiring(false);setError('');}catch{setError('지원되지 않거나 손상된 저장 파일입니다. 현재 세계를 유지합니다.');}}
-  function restart() {
-    if (!/^\d+$/.test(seed) || Number(seed) > 0xffffffff) { setError('0~4294967295의 정수 시드를 입력하세요.'); return; }
-    simulation.current = new Simulation(Number(seed));
-    setSelected(null); setMessage('새로운 세계를 시작했습니다. 인물을 선택하세요.');
-    pause(true); setWorld(simulation.current.snapshot()); setError('');
-  }
-  return <div className="app">
-    <header><a className="brand" href="#">INHERITANCE<span>인간이 남긴 것들</span></a><div className="chapter">CHAPTER 01 <span>역사가 시작되기 전</span></div><button className="help" onClick={() => setHelp(!help)} aria-expanded={help}>안내 {help ? '−' : '+'}</button></header>
-    {help && <div className="notice">STEP 4 개발 빌드입니다. 생활은 1일, 생애는 30일, 역사는 5년이 현실 1초에 흐릅니다. 중요 사건과 생애 종료 시 즉시 멈춥니다. 같은 시드로 다시 시작하면 같은 초기 상태를 재현합니다. 처음 선택한 한 인간만 조작합니다. 다른 NPC 클릭은 관찰이며, 내 캐릭터를 보고 있을 때 땅을 누르면 경로를 예약합니다. 강·암석은 통과할 수 없습니다. 모든 인물은 욕구와 기질에 따라 자율 행동합니다. 행동 지시는 한 번 수행 후 자율 행동으로 돌아갑니다.</div>}
-    <div className="timebar"><div><span className="status-dot"/> 선사시대 <span className="divider">/</span> <strong>제 {world.world.day + 1}일</strong></div><div className="controls"><span className="clock-label" aria-live="polite">{paused ? '일시정지' : '시간이 흐르는 중'}</span><button aria-label={paused ? '시간 재생' : '시간 일시정지'} onClick={() => pause(!paused)}>{paused ? '▶' : 'Ⅱ'}</button>{([1,2,4] as Speed[]).map(value => <button key={value} aria-pressed={speed === value} onClick={() => {clock.current.setSpeed(value); setSpeed(value);}}>{value}×</button>)}</div></div>
-    <section className="time-modes" aria-label="시간 모드">{(Object.keys(TIME_MODES) as TimeMode[]).map(mode=><button key={mode} aria-pressed={world.timeline.mode===mode} disabled={!!world.timeline.pending||(mode==='history'?world.player.phase!=='successor':world.player.phase!=='playing')} onClick={()=>changeMode(mode)}>{TIME_MODES[mode].label} · {mode==='daily'?'1일':mode==='life'?'1개월':'5년'}/초</button>)}<p>현재 {TIME_MODES[world.timeline.mode].label} 모드 · {speed}배속 (표기는 1배속 기준) · 경과 {Math.floor(world.world.day/365)}년 {world.world.day%365}일 · 생존 {world.world.humans.filter(h=>h.alive).length}명 · 출생 {world.timeline.births} · 사망 {world.timeline.deaths}<br/>문화: 협력 {Math.round(world.timeline.culture.cooperation)} / 전승 {Math.round(world.timeline.culture.tradition)}</p><button onClick={exportSave}>저장 파일 내려받기</button><label>저장 불러오기 <input type="file" accept="application/json" onChange={e=>void importSave(e.target.files?.[0])}/></label>
-    {world.timeline.pending&&<div role="dialog" aria-label="중요 사건"><h2>{world.timeline.pending.title}</h2><p>제 {world.timeline.pending.day}일에 시간이 멈췄습니다.</p><button onClick={()=>{simulation.current.acknowledgeEvent();setWorld(simulation.current.snapshot());}}>사건 확인</button></div>}
-    <details><summary>사건 기록</summary>{world.timeline.events.slice(-10).reverse().map((e,i)=><p key={i}>제 {e.day}일 · {e.important?'중요':'일반'} · {e.title}</p>)}</details></section>
-    <section className="identity" aria-label="플레이어 신분"><strong>현재 플레이어: {player?.name??'아직 선택하지 않음'}</strong>{world.player.phase==='playing'&&<><button onClick={()=>setSelected(world.player.humanId)}>내 캐릭터 보기</button><button onClick={()=>{pause(true);setRetiring(true);}}>이 삶 마무리하기</button></>}{retiring&&<div role="dialog" aria-label="생애 마무리 확인"><p>직접 조작을 끝내고 이 인간을 자율 NPC로 남깁니다. 결산 후 역사 모드 또는 다음 삶을 선택할 수 있습니다.</p><button onClick={()=>{if(simulation.current.retire()){setWorld(simulation.current.snapshot());setRetiring(false);}}}>마무리 확정</button><button onClick={()=>setRetiring(false)}>계속 살아가기</button></div>}<p>다른 인물 클릭은 관찰입니다. 삶의 주인공은 사망 또는 명시적 생애 마무리 후 결산·계승 절차에서만 바뀝니다.</p>
-    {['choose','successor'].includes(world.player.phase)&&<div><h2>{world.player.phase==='choose'?'첫 삶을 선택하세요':'다음 삶을 선택하세요'}</h2>{world.world.humans.filter(h=>h.alive&&!(world.player.phase==='successor'&&world.player.summary?.retired&&h.id===world.player.humanId)).map(h=><button key={h.id} onClick={()=>choose(h.id)}>{h.name}의 삶 시작</button>)}{!world.world.humans.some(h=>h.alive)&&<p>살아 있는 인간이 없습니다. 새로운 세계를 시작할 수 있습니다.</p>}</div>}
-    {world.player.phase==='summary'&&world.player.summary&&<div role="dialog" aria-label="생애 결산"><h2>{world.player.summary.name}의 생애 결산</h2><p>플레이 시작: 제 {world.player.summary.startedDay+1}일 · {world.player.summary.retired?'마무리':'사망'}: 제 {world.player.summary.diedDay}일</p><p>보유 지식: {world.player.summary.knowledge.map(k=>TECHNOLOGIES.find(t=>t.id===k)?.name).join(', ')||'없음'} · 관계 {Object.keys(world.player.summary.relationships).length}명</p><p>후계자는 자신의 지식으로 시작합니다. 세계에 전파된 지식만 남습니다.</p><button onClick={()=>{simulation.current.reviewLife();setWorld(simulation.current.snapshot());setSelected(null);}}>결산 확인 · 계승자 선택</button></div>}</section>
-    <main><section className="world"><div className="world-label">THE FIRST CHAPTER <span>01 — 기원</span></div><WorldMap state={world} selected={selected} onSelect={setSelected} onMove={move}/><div className="world-bottom"><span>이름 없는 골짜기</span><span>48 × 48 · 아이소메트릭</span></div></section>
-    <aside><p className="eyebrow">YOUR WORLD</p><h2>세계의 시작</h2><p className="muted">아직 아무도 이름 붙이지 않은 땅.<br/>이곳에서 새로운 이야기가 시작됩니다.</p><div className="stats"><div><span>시대</span><strong>선사시대</strong></div><div><span>경과 시간</span><strong>{world.world.day} <small>일</small></strong></div><div><span>시뮬레이션 틱</span><strong>{world.world.day.toLocaleString()}</strong></div></div><div className="person"><h3>{human ? `${human.name} · ${isPlayer?'나':'관찰 대상'}` : '관찰할 인물을 선택하세요'}</h3>{human && <p>위치 ({human.position.x}, {human.position.y}) · {human.path.length ? `${human.path.length}칸 이동 예정` : ACTION_LABELS[human.action]}</p>}<label className="human-select">관찰할 인간<select aria-label="관찰할 인간" value={selected??''} onChange={e=>setSelected(e.target.value||null)}><option value="">선택하세요</option>{world.world.humans.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}</select></label>{human && <div className="human-details"><p className="control-state">{human.control==='player'?'플레이어 지시 중':'자율 행동 중'} · {ACTION_LABELS[human.action]}</p><p>{human.reason}</p><dl className="vitals">{([['건강',human.health],['허기',human.hunger],['피로',human.fatigue],['외로움',human.loneliness]] as const).map(([label,value])=><div key={label}><dt>{label}</dt><dd><meter min="0" max="100" value={value} aria-label={label}/><span>{value}</span></dd></div>)}</dl><p>소지 식량 {human.food}개 · 탐험한 땅 {human.visited.length}칸<br/>현재 타일 먹을거리 {world.world.resources[human.position.y*world.world.map.width+human.position.x]}개</p><div className="traits">{([['호기심',human.traits.curiosity],['안정 추구',human.traits.stability],['사회성',human.traits.sociability],['위험 감수',human.traits.riskTaking]] as const).map(([name,value])=><span key={name}>{name} <strong>{value}</strong></span>)}</div>{isPlayer&&<div className="action-buttons" aria-label="행동 지시">{(['gather','explore','rest','socialize'] as Activity[]).map(action=><button key={action} onClick={()=>act(action)}>{ACTION_LABELS[action]}</button>)}<button className="auto-button" onClick={cancel}>지시 취소 · 자율 복귀</button></div>}{!isPlayer&&world.player.phase==='playing'&&human.alive&&<div><p>NPC 정보 · 직접 행동 지시 불가</p><button onClick={requestFood}>식량 나눔 부탁</button></div>}<details className="tech-panel" open><summary>기술 · 실험과 전승</summary>{TECHNOLOGIES.map(t=><div className="tech-card" key={t.id}><strong>{t.name} · {human.knowledge.includes(t.id)?'알고 있음':'미발견'}</strong><p>{t.condition} · 식량 {t.cost}개 · 피로 ≤85<br/>{t.effect}</p><p>보유 {world.world.technologies[t.id].holders}/{world.world.humans.filter(h=>h.alive).length}명 · {world.world.technologies[t.id].adopted?'공동체 정착':'개인 지식 단계'}</p>{isPlayer&&<><button disabled={!canExperiment(world.world,human,t.id)} onClick={()=>technology({kind:'experiment',id:t.id})}>실험: {t.name}</button><button disabled={!human.knowledge.includes(t.id)} onClick={()=>technology({kind:'teach',id:t.id})}>전파: {t.name}</button></>}</div>)}<p>전파는 3칸 이내의 미보유자에게 시도합니다. 신뢰와 기질에 따라 거부할 수 있습니다.</p>{human.techOrder&&<p role="status">예약: {human.techOrder.kind==='experiment'?'실험':'전파'} · {TECHNOLOGIES.find(t=>t.id===human.techOrder?.id)?.name}</p>}</details><details><summary>관계 ({Object.keys(human.relationships).length}명)</summary>{Object.entries(human.relationships).map(([id,rel])=><p key={id}>{world.world.humans.find(h=>h.id===id)?.name} · 친밀 {rel.familiarity} / 신뢰 {rel.trust}</p>)}{!Object.keys(human.relationships).length&&<p>교류를 통해 관계를 형성합니다.</p>}</details></div>}<p role="status">{message}</p></div><div className="seed"><label htmlFor="seed">세계 시드 <span>결정론적 시뮬레이션</span></label><div><input id="seed" inputMode="numeric" value={seed} onChange={e => setSeed(e.target.value)} aria-describedby={error ? 'seed-error' : undefined}/><button onClick={restart}>다시 시작</button></div>{error && <p id="seed-error" role="alert">{error}</p>}<p>적용된 시드 {world.seed} · 같은 시작, 같은 시간의 흐름</p></div></aside></main>
-    <footer><div><span className="eyebrow">CHRONICLE</span><h2>골짜기의 하루</h2></div><div className="technology-log"><h3>기술의 발자취</h3>{world.world.technologyLog.slice(-8).reverse().map((e,i)=><p key={i}>제 {e.day}일 · {e.text}</p>)}{!world.world.technologyLog.length&&<p>인물을 선택해 식량 저장부터 실험해 보세요.</p>}</div><div className="daily-log" aria-label="최근 행동 기록">{world.world.activityLog.length ? world.world.activityLog.slice(-6).reverse().map((entry,i)=><p key={`${entry.day}-${entry.humanId}-${i}`}><span>제 {entry.day}일</span> {world.world.humans.find(h=>h.id===entry.humanId)?.name} · {entry.text}</p>) : <p>재생하면 인간들이 스스로 하루를 살아갑니다.</p>}</div><span className="build">PROTOTYPE / STEP 04</span></footer>
-  </div>;
+type Panel='person'|'time'|'chronicle'|'settings';
+const statuses={queued:'예약',progress:'진행',completed:'완료',failed:'실패',cancelled:'취소'};
+const title:Record<Panel,string>={person:'인물과 행동',time:'시간과 공동체',chronicle:'기억과 전승',settings:'설정과 도움말'};
+const techName=(id:string)=>TECHNOLOGIES.find(t=>t.id===id)?.name??id;
+const traits=(h:HumanState)=>`호기심 ${h.traits.curiosity} · 안정 ${h.traits.stability} · 사회성 ${h.traits.sociability}`;
+export function App(){
+ const [boot]=useState(browserSave);
+ const [initial]=useState(()=>boot.simulation??new Simulation()),simulation=useRef(initial),clock=useRef(new GameClock());
+ const audio=useRef<WorldAudio|null>(null),[sound,setSound]=useState(false),[saveStatus,setSaveStatus]=useState(boot.message||'자동 저장 대기');
+ const [snapshot,setSnapshot]=useState(()=>initial.snapshot()),[paused,setPaused]=useState(true),[speed,setSpeed]=useState<Speed>(1);
+ const [mobile,setMobile]=useState(()=>window.matchMedia('(max-width: 900px)').matches);
+ const [panel,setPanel]=useState<Panel|null>(null),[selected,setSelected]=useState<string|null>(()=>initial.snapshot().player.humanId),[seed,setSeed]=useState(()=>String(initial.snapshot().seed));
+ const [notice,setNotice]=useState({label:'새로운 시작',text:boot.message||'첫 삶을 선택하세요.',important:false}),[error,setError]=useState(''),[restartConfirm,setRestartConfirm]=useState(false),[selectLife,setSelectLife]=useState(false);
+ const latestSnapshot=useRef(snapshot);latestSnapshot.current=snapshot;
+ useEffect(()=>{
+  let lastSaved='';
+  const saveNow=()=>{
+   const current=latestSnapshot.current;if(current.player.phase==='choose')return;
+   const signature=JSON.stringify(current);if(signature===lastSaved)return;
+   try{if(!writeAutosave(window.localStorage,current))throw new Error();lastSaved=signature;setSaveStatus('자동 저장 완료 · 제 '+(current.world.day+1)+'일');}
+   catch{setSaveStatus('자동 저장 실패 · 파일로 저장하세요.');}
+  };
+  const timer=window.setInterval(saveNow,2000);
+  const hide=()=>{if(document.hidden)saveNow();};
+  window.addEventListener('pagehide',saveNow);document.addEventListener('visibilitychange',hide);
+  return()=>{clearInterval(timer);window.removeEventListener('pagehide',saveNow);document.removeEventListener('visibilitychange',hide);};
+ },[]);
+ useEffect(()=>{audio.current?.setPlaying(sound&&!paused);},[sound,paused]);
+ useEffect(()=>()=>{audio.current?.destroy();audio.current=null;},[]);
+ async function toggleSound(){
+  try{if(sound){await audio.current?.disable();setSound(false);}else{audio.current??=new WorldAudio();await audio.current.enable();audio.current.setPlaying(!paused);setSound(true);}}
+  catch{tell('이 브라우저에서 소리를 시작하지 못했습니다.','음향');}
+ }
+ const drawer=useRef<HTMLElement>(null),opener=useRef<HTMLElement|null>(null);
+ const w=snapshot.world,p=snapshot.player,t=snapshot.timeline;
+ const player=w.humans.find(h=>h.id===p.humanId),human=w.humans.find(h=>h.id===selected);
+ const isPlayer=p.phase==='playing'&&!!human?.alive&&human.id===p.humanId;
+ const event=t.pending,other=w.humans.find(h=>h.id===event?.otherId&&h.alive);
+ const invitation=t.events.filter(e=>e.id==='opportunity').at(-1);
+ const canMeet=p.phase==='playing'&&invitation&&w.day-invitation.day<45&&t.last.openOpportunity!==invitation.day&&w.humans.some(h=>h.id===invitation.otherId&&h.alive);
+ const distance=player&&other?Math.abs(player.position.x-other.position.x)+Math.abs(player.position.y-other.position.y):Infinity;
+ const refresh=()=>setSnapshot(simulation.current.snapshot());
+ function tell(text:string,label='안내',important=false){setNotice({text,label,important});}
+ function pause(value:boolean){if(!value&&!simulation.current.canAdvance())return;clock.current.setPaused(value);setPaused(value);}
+ function openPanel(value:Panel){opener.current=document.activeElement as HTMLElement;setPanel(old=>old===value?null:value);}
+ function closePanel(){setPanel(null);opener.current?.focus();}
+ useEffect(()=>{const media=window.matchMedia('(max-width: 900px)');const change=()=>setMobile(media.matches);media.addEventListener('change',change);return()=>media.removeEventListener('change',change);},[]);
+ useEffect(()=>{
+  if(!panel)return;drawer.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){setPanel(null);opener.current?.focus();}if(e.key==='Tab'&&mobile){const nodes=Array.from(drawer.current?.querySelectorAll<HTMLElement>('button:not(:disabled),select,input,summary,[tabindex="0"]')??[]).filter(n=>n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
+  document.addEventListener('keydown',key);return()=>document.removeEventListener('keydown',key);
+ },[panel,mobile]);
+ useEffect(()=>{
+  let previous=performance.now(),frame=0;
+  const update=(now:number)=>{const count=clock.current.advance(Math.max(0,now-previous),()=>{simulation.current.advance();return simulation.current.canAdvance();});previous=now;if(count){setSnapshot(simulation.current.snapshot());if(!simulation.current.canAdvance())pause(true);}frame=requestAnimationFrame(update);};
+  const visibility=()=>{previous=performance.now();if(document.hidden)pause(true);};document.addEventListener('visibilitychange',visibility);frame=requestAnimationFrame(update);
+  return()=>{cancelAnimationFrame(frame);document.removeEventListener('visibilitychange',visibility);};
+ },[]);
+ const feedback=player?.command;
+ useEffect(()=>{if(sound&&feedback&&['completed','failed'].includes(feedback.status))audio.current?.cue(feedback.kind==='실험');if(feedback)setNotice({label:statuses[feedback.status],text:feedback.text,important:feedback.kind==='실험'||feedback.kind==='전파'});},[feedback?.id,feedback?.status,feedback?.text,feedback?.day]);
+ useEffect(()=>{if(event&&sound)audio.current?.cue(true);},[event?.id,event?.day]);
+ const latestLegacy=p.humanId?w.legacy.people[p.humanId]?.entries.at(-1):undefined;
+ useEffect(()=>{if(latestLegacy&&['discovery','learning','loss'].includes(latestLegacy.kind))setNotice({label:'지식의 흔적',text:latestLegacy.text,important:true});},[latestLegacy?.day,latestLegacy?.text]);
+ function observe(id:string){setSelected(id);if(mobile)setPanel('person');}
+ function choose(id:string){if(simulation.current.choosePlayer(id)){pause(true);setSelected(id);setSelectLife(false);setPanel(null);refresh();tell('이 인간의 삶을 시작합니다. 다른 사람은 관찰 대상입니다.','삶의 시작');}}
+ function move(target:Point){if(!isPlayer||!selected){tell('내 캐릭터를 선택한 상태에서 이동할 땅을 누르세요.');return;}if(simulation.current.move(selected,target)){refresh();}else tell('강·암석 또는 도달할 수 없는 땅입니다.','이동 불가');}
+ function act(action:Activity){if(!isPlayer||!selected)return;if(simulation.current.act(selected,action))refresh();else tell('가까운 자원이나 교류 가능한 상대가 없습니다. 같은 상대와의 교류는 잠시 기다려 주세요.','지시 불가');}
+ function technology(order:TechOrder){if(!isPlayer||!selected)return;if(simulation.current.technology(selected,order))refresh();else tell('실험 조건이나 전승 지식을 확인하세요.','지시 불가');}
+ function requestFood(){if(!selected)return;const r=simulation.current.requestFood(selected);tell(r==='accepted'?'식량 나눔 수락 · 식량 +1':r==='refused'?'상대가 식량 나눔을 거절했습니다.':r==='cooldown'?'같은 상대에게는 7일 뒤 다시 부탁할 수 있습니다.':'살아 있는 플레이어가 3칸 이내에 있어야 합니다.','부탁 결과');refresh();}
+ function respond(choice:'talk'|'food'|'skip'|'teach',id?:TechnologyId){tell(simulation.current.respondToEncounter(choice,id),'대화 결과',choice==='teach');refresh();}
+ function mode(value:TimeMode){pause(true);if(simulation.current.setMode(value))refresh();}
+ function save(){const blob=new Blob([JSON.stringify(simulation.current.snapshot())],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='inheritance-save-v3.json';a.click();URL.revokeObjectURL(url);tell('저장 파일을 내려받았습니다.','저장');}
+ async function load(file?:File){if(!file)return;pause(true);try{const next=Simulation.restore(JSON.parse(await file.text()));simulation.current=next;const data=next.snapshot();setSnapshot(data);setSelected(data.player.humanId);setSeed(String(data.seed));setError('');tell('세계와 인물의 기록을 복원했습니다.','불러오기');}catch{setError('손상되거나 지원하지 않는 저장 파일입니다. 현재 세계를 유지합니다.');}}
+ function restart(){if(!/^\d+$/.test(seed)||Number(seed)>0xffffffff){setError('0~4294967295 사이 정수 시드를 입력하세요.');return;}pause(true);simulation.current=new Simulation(Number(seed));try{writeAutosave(window.localStorage,simulation.current.snapshot());}catch{/* file export remains available */}refresh();setSelected(null);setPanel(null);setRestartConfirm(false);setError('');tell('첫 삶을 선택하세요.','새로운 세계');}
+ const personEntries=selected?w.legacy.people[selected]?.entries??[]:[];
+ const dailyGroups=Object.values(w.activityLog.slice(-80).reduce<Record<string,{name:string;text:string;day:number;count:number}>>((groups,e)=>{const key=`${e.humanId}:${e.text}`;groups[key]??={name:e.humanName??nameOf(w,e.humanId),text:e.text,day:e.day,count:0};groups[key].count++;groups[key].day=e.day;return groups;},{})).sort((a,b)=>b.day-a.day).slice(0,12);
+ const candidates=w.humans.filter(h=>h.alive);
+ return <div className="app">
+  <header><a className="brand" href="#">INHERITANCE<span>인간이 남긴 것들</span></a><div className="identity" aria-label="플레이어 신분"><span>{p.phase==='playing'?'현재 플레이어':p.phase==='choose'?'첫 삶을 기다리는 세계':'이전 삶 · 계승 대기'}</span><strong>{player?.name??'이름 없는 골짜기'}{player&&` · ${years(player)}세`}</strong></div>{p.phase==='successor'&&t.mode==='history'&&<button onClick={()=>{pause(true);setSelectLife(true);}}>다음 삶 선택</button>}<button className="my-person" disabled={!player} onClick={()=>{setSelected(p.humanId);openPanel('person');}}>내 인물</button></header>
+  <div className="timebar"><div><span className="status-dot"/><strong>{calendar(w.day)}</strong><span className="date-detail">선사시대 · 경과 {Math.floor(w.day/365)}년 {w.day%365}일</span></div><div className="controls"><span className="clock-label">{TIME_MODES[t.mode].label} · {paused?'일시정지':'진행 중'}</span><button aria-label={paused?'시간 재생':'시간 일시정지'} onClick={()=>pause(!paused)}>{paused?'▶':'Ⅱ'}</button>{([1,2,4] as Speed[]).map(v=><button key={v} aria-pressed={speed===v} onClick={()=>{clock.current.setSpeed(v);setSpeed(v);}}>{v}×</button>)}</div></div>
+  <main className="play-layout"><section className="world"><WorldMap playback={{paused,speed}} state={snapshot} selected={selected} onSelect={observe} onMove={move}/><div className="world-caption"><span>THE FIRST VALLEY</span><strong>이름 없는 골짜기</strong><small>{t.mode==='history'?'역사 집계 · 인구와 문화의 변화를 관찰합니다':t.mode==='life'?'생애 압축 · 이동을 요약해 보여줍니다':'한 인간의 하루를 따라가세요'}</small></div><div className={`world-toast ${notice.important?'important':''}`} role="status"><strong>{notice.label}</strong><span>{notice.text}</span>{feedback?.status==='queued'&&<small>{paused?'재생하면 실행됩니다.':'다음 날 실행됩니다.'}</small>}</div><span className="build">{__BUILD_VERSION__}</span>{canMeet&&!event&&<button className="meet-invitation" onClick={()=>{if(simulation.current.openEncounter()){pause(true);refresh();}}}>{invitation.title} · 확인</button>}</section>
+   {panel&&<>{mobile&&<button className="drawer-backdrop" aria-label="패널 닫기" onClick={closePanel}/>}<aside ref={drawer} id="game-panel" className="drawer" role="dialog" aria-modal={mobile} aria-label={title[panel]}><div className="drawer-heading"><div><span className="eyebrow">INHERITANCE</span><h2>{title[panel]}</h2></div><button className="close-panel" aria-label="창 닫기" onClick={closePanel}>×</button></div><div className="drawer-body">
+    {panel==='person'&&<div className="person"><label>관찰할 인간<select aria-label="관찰할 인간" value={selected??''} onChange={e=>setSelected(e.target.value||null)}><option value="">선택하세요</option><optgroup label="생존자">{w.humans.filter(h=>h.alive).map(h=><option key={h.id} value={h.id}>{h.name} · {years(h)}세 {h.id===p.humanId?'· 나':''}</option>)}</optgroup><optgroup label="사망자">{w.humans.filter(h=>!h.alive).map(h=><option key={h.id} value={h.id}>{h.name} · 사망</option>)}</optgroup></select></label>
+     {human?<><div className="person-title"><h2>{human.name}</h2><span>{isPlayer?'나의 삶':human.alive?'관찰 대상':'사망자 기록'}</span></div><p className="life-status">{human.alive?`${years(human)}세 · 생존`:`${calendar(human.deathDay??w.day)} 사망 · 향년 ${years(human)}세 · ${human.deathCause??'원인 기록 없음'}`}</p><p className="muted">{human.alive?'현재 상태':'아래는 사망 당시 정보입니다.'} · 위치 ({human.position.x}, {human.position.y})</p><p className="control-state">{human.alive?(human.control==='player'?'플레이어 지시 중':'자율 행동'):'생애 종료'} · {human.alive?ACTION_LABELS[human.action]:'행동 없음'}</p>
+     <dl className="vitals">{([['건강',human.health],['허기',human.hunger],['피로',human.fatigue],['외로움',human.loneliness]] as const).map(([label,value])=><div key={label}><dt>{label}</dt><dd><meter min="0" max="100" value={value} aria-label={label}/><span>{value}</span></dd></div>)}</dl><p>소지 식량 {human.food}개 · 방문한 땅 {human.visited.length}칸</p><p className="muted">{traits(human)} · 위험 감수 {human.traits.riskTaking}</p>
+     {isPlayer?<><div className="action-buttons">{(['gather','explore','rest','socialize'] as Activity[]).map(a=><button key={a} onClick={()=>act(a)}>{ACTION_LABELS[a]}</button>)}<button className="wide" onClick={()=>{simulation.current.resumeAuto(human.id);refresh();}}>지시 취소 · 자율 복귀</button></div>{feedback&&<p className="command-feedback">{statuses[feedback.status]} · {feedback.text}</p>}</>:human.alive&&p.phase==='playing'?<><p className="muted">NPC는 관찰만 가능합니다. 협력은 부탁으로 요청하세요.</p><button onClick={requestFood}>식량 나눔 부탁</button><p className="muted">3칸 이내 · 같은 상대에게 7일 간격</p></>:null}
+     <details className="tech-panel" open><summary>기술과 생활</summary>{TECHNOLOGIES.map(tech=><div className="tech-card" key={tech.id}><strong>{tech.name}</strong><span className="knowledge-state">{human.knowledge.includes(tech.id)?'개인 보유':!w.technologies[tech.id].everDiscovered&&!w.technologies[tech.id].holders?'미발견':w.technologies[tech.id].holders?'개인 미습득':'과거 발견 후 소실'}</span><p>{tech.effect}</p><p className="muted">보유 {w.technologies[tech.id].holders}명 · {w.technologies[tech.id].adopted?'공동체 정착':'개인 사용 단계'}</p>{isPlayer&&<><p className="risk">조건: {tech.condition}, 피로 ≤85<br/>실험 비용: 식량 1 / 피로 +15<br/>성공 약 {Math.round((tech.chance+human.traits.curiosity/1000)*100)}% · 실패 시 건강 −2</p><button disabled={!canExperiment(w,human,tech.id)} onClick={()=>technology({kind:'experiment',id:tech.id})}>실험: {tech.name}</button><button disabled={!human.knowledge.includes(tech.id)} onClick={()=>technology({kind:'teach',id:tech.id})}>전파: {tech.name}</button></>}</div>)}</details>
+     <details><summary>관계 ({Object.keys(human.relationships).length}명)</summary>{Object.entries(human.relationships).map(([id,r])=><p key={id}>{nameOf(w,id)} · 친밀 {r.familiarity} / 신뢰 {r.trust}</p>)}</details><button className="wide" onClick={()=>setPanel('chronicle')}>{human.name}의 개인 연대기 보기</button></>:<p>지도나 목록에서 인간을 관찰하세요. 관찰은 플레이어 신분을 바꾸지 않습니다.</p>}
+    </div>}
+    {panel==='time'&&<><h3>시간의 흐름</h3><div className="mode-options">{(Object.keys(TIME_MODES) as TimeMode[]).map(m=><button key={m} aria-pressed={t.mode===m} disabled={!!t.pending||(m==='history'?p.phase!=='successor':p.phase!=='playing')} onClick={()=>mode(m)}>{TIME_MODES[m].label} · {m==='daily'?'1일':m==='life'?'1개월':'5년'}/초</button>)}</div><p className="muted">1배속 기준입니다. 모드 변경 후 재생하세요. 역사는 사망과 생애 결산 확인 후에만 열립니다.</p><p>역사 모드는 이동·접촉을 집계 계산하는 근사입니다. 출생·노화·사망 규칙은 모든 모드에서 같습니다.</p><div className="world-stats"><p>생존 {candidates.length}명</p><p>출생 {t.births}명 · 사망 {t.deaths}명</p><p>문화 · 협력 {Math.round(t.culture.cooperation)} / 전승 {Math.round(t.culture.tradition)}</p></div><h3>사건 기록</h3>{t.events.slice(-15).reverse().map((e,i)=><p key={i}>{calendar(e.day)} · {e.important?'중요':'일반'} · {e.title}</p>)}</>}
+    {panel==='chronicle'&&<><h3>{human?.name??'선택한 인간'}의 개인 연대기</h3><p className="muted">보유 지식과 직접 발견한 업적을 구분합니다.</p>{personEntries.length?personEntries.slice().reverse().map((e,i)=><p className="chronicle-entry" key={i}><small>{calendar(e.day)} · {({discovery:'직접 발견',learning:'배움',teaching:'전승',help:'도움·관계',refusal:'거절',death:'생애 종료',world:'세계',loss:'소실'})[e.kind]}</small>{e.text}</p>):<p>아직 기록된 중요한 사건이 없습니다.</p>}<h3>지식이 이어진 길</h3>{w.legacy.transmissions.filter(e=>!selected||e.fromId===selected||e.toId===selected).slice().reverse().map((e,i)=><p className="chronicle-entry" key={i}><small>{calendar(e.day)} · {({direct:'직접 전승',social:'교류',history:'역사 집계'})[e.method]}</small>{e.fromName} → {e.toName} · {techName(e.technology)}</p>)}<details><summary>골짜기의 일상 · 요약</summary>{dailyGroups.map((e,i)=><p key={i}>{calendar(e.day)} · {e.name}: {e.text}{e.count>1?` (${e.count}회)`:''}</p>)}</details></>}
+    {panel==='settings'&&<><h3>세계 보관하기</h3><p role="status">{saveStatus}</p><p className="muted">자동 저장은 기기·브라우저별로 보관됩니다. 다른 기기로 옮길 때는 파일을 내려받으세요.</p><button onClick={save}>저장 파일 내려받기</button><label className="file-label">저장 불러오기<input type="file" accept="application/json" onChange={e=>void load(e.target.files?.[0])}/></label><p className="muted">v1·v2·v3 파일 지원. 불러오기는 일시정지로 시작하며 손상된 파일은 현재 세계를 덮어쓰지 않습니다. 2초마다 이 브라우저에 자동 저장하며 다음 방문에 일시정지 상태로 복원합니다.</p>{error&&<p role="alert">{error}</p>}<h3>소리</h3><button aria-pressed={sound} onClick={()=>void toggleSound()}>자연·효과음 {sound?'켜짐':'꺼짐'}</button><p className="muted">바람과 물소리, 행동 완료·주요 사건의 짧은 음을 재생합니다.</p><h3>조작 안내</h3><p>한 인간의 삶만 조작합니다. 다른 NPC를 누르면 관찰 창이 열립니다. 내 캐릭터 선택 후 땅을 누르면 이동을 예약합니다.</p><p>지도를 드래그해 이동하고, 휠 또는 두 손가락 핀치로 확대하세요. 패널은 × 또는 바깥 영역을 눌러 닫습니다.</p><p>생활은 하루씩, 생애는 30일씩, 역사는 5년씩 계산합니다. 중요 사건과 사망에서는 즉시 정지합니다.</p><p>건강 0 또는 80세 노령에 사망합니다. 사망 후 결산을 확인해야 다른 삶을 선택할 수 있습니다.</p><label>새 세계 시드<input aria-label="세계 시드" inputMode="numeric" value={seed} onChange={e=>setSeed(e.target.value)}/></label><button onClick={()=>setRestartConfirm(true)}>새 세계 시작</button><p className="muted">{__BUILD_VERSION__} · 직접 제작한 픽셀 스프라이트 · 저장 형식 v3</p></>}
+   </div></aside></>}
+  </main>
+  <nav className="panel-nav" aria-label="게임 메뉴">{(Object.keys(title) as Panel[]).map(key=><button key={key} aria-expanded={panel===key} aria-controls="game-panel" onClick={()=>openPanel(key)}><span>{({person:'◉',time:'◷',chronicle:'≋',settings:'⚙'})[key]}</span>{({person:'인물·행동',time:'시간',chronicle:'연대기',settings:'설정'})[key]}</button>)}</nav>
+  {p.phase==='summary'&&p.summary&&<div className="modal-backdrop"><section className="modal life-summary" role="dialog" aria-modal="true" aria-label="생애 결산"><span className="eyebrow">A LIFE REMEMBERED</span><h1>{p.summary.name}이 남긴 것</h1><p>{calendar(p.summary.startedDay)} → {calendar(p.summary.diedDay)} · 플레이한 기간 {p.summary.diedDay-p.summary.startedDay}일</p><p>향년 {p.summary.ageYears??(player?years(player):'?')}세 · {p.summary.cause??player?.deathCause??'이전 기록에 원인 없음'}</p><h3>발견과 배움</h3>{p.summary.entries?.filter(e=>['discovery','learning'].includes(e.kind)).map((e,i)=><p key={i}>{e.kind==='discovery'?'직접 발견':'배움'} · {e.text}</p>)}<p>사망 당시 보유: {p.summary.knowledge.map(techName).join(', ')||'없음'}</p><h3>다른 인간에게 남긴 지식</h3>{p.summary.entries?.filter(e=>e.kind==='teaching').map((e,i)=><p key={i}>{e.text}</p>)}<h3>결산 당시 세계의 흔적</h3>{p.summary.impact?.map(e=><p key={e.technology}>{techName(e.technology)} · {e.holders.length?`생존 보유자: ${e.holders.map(h=>h.name).join(', ')}`:'살아 있는 보유자 없음'}</p>)}<h3>중요한 관계</h3>{Object.entries(p.summary.relationships).sort((a,b)=>b[1].trust-a[1].trust).slice(0,5).map(([id,r])=><p key={id}>{nameOf(w,id)} · 친밀 {r.familiarity} / 신뢰 {r.trust}</p>)}<button className="primary" onClick={()=>{simulation.current.reviewLife();setSelected(null);refresh();}}>결산 확인 · 계승자 선택</button></section></div>}
+  {event&&p.phase!=='summary'&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="중요 사건"><span className="eyebrow">{calendar(event.day)}</span><h2>{event.title}</h2>{event.id==='encounter'?<><p>{other?`${other.name} · ${years(other)}세`:'상대가 더 이상 살아 있지 않습니다.'}</p><p>{event.reason??'이전 버전의 대화 기록입니다.'}</p>{distance>3&&other&&<p className="risk">상대까지 {distance}칸입니다. 지금은 지나간 뒤 가까이 이동해야 합니다.</p>}<div className="event-choices"><button disabled={!other||distance>3} onClick={()=>respond('talk')}>대화하기</button><button disabled={!other||distance>3} onClick={()=>respond('food')}>식량 나눔 부탁</button>{TECHNOLOGIES.filter(tech=>player?.knowledge.includes(tech.id)&&!other?.knowledge.includes(tech.id)).map(tech=><button key={tech.id} disabled={!other||distance>3} onClick={()=>respond('teach',tech.id)}>{tech.name} 전하기</button>)}<button onClick={()=>respond('skip')}>지금은 지나가기</button></div><p className="muted">같은 상대에게 같은 부탁은 7일 간격입니다. 대화는 피로 3을 사용하며 상대가 거절할 수 있습니다.</p><p role="status">{notice.label==='대화 결과'?notice.text:''}</p></>:<><p>시간이 멈췄습니다. 상황을 확인하고 계속 진행하세요.</p><button onClick={()=>{simulation.current.acknowledgeEvent();refresh();}}>사건 확인</button></>}</section></div>}
+  {(p.phase==='choose'||p.phase==='successor'&&(t.mode!=='history'||selectLife))&&!event&&<div className="modal-backdrop"><section className="modal candidates" role="dialog" aria-modal="true" aria-label="삶 선택"><span className="eyebrow">{p.phase==='choose'?'YOUR FIRST LIFE':'THE NEXT CHAPTER'}</span><h1>{p.phase==='choose'?'한 인간의 삶을 시작하세요':'누구의 삶을 이어갈까요'}</h1><p>한 사람의 선택과 지식이 다른 인간을 통해 역사로 이어집니다.</p><div className="candidate-grid">{candidates.map(h=><button key={h.id} onClick={()=>choose(h.id)} aria-label={`${h.name}의 삶 시작`}><strong>{h.name} <small>{years(h)}세 · 생존</small></strong><span>{traits(h)}</span><span>지식: {h.knowledge.map(techName).join(', ')||'아직 없음'}</span></button>)}</div>{!candidates.length&&<><p>살아 있는 인간이 없습니다.</p><button onClick={()=>setRestartConfirm(true)}>새 세계 시작</button></>}{p.phase==='successor'&&<button onClick={()=>{mode('history');setSelectLife(false);setPanel(null);tell('역사 모드가 준비됐습니다. 재생하면 시간이 흐릅니다.');}}>역사 모드로 관찰하기</button>}<button onClick={()=>{setPanel('settings');}}>저장 파일 불러오기</button>{panel==='settings'&&<label className="file-label">파일 선택<input type="file" accept="application/json" onChange={e=>void load(e.target.files?.[0])}/>{error&&<span role="alert">{error}</span>}</label>}</section></div>}
+  {restartConfirm&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="새 세계 확인"><h2>새 세계를 시작할까요?</h2><p>저장하지 않은 현재 진행은 사라집니다.</p><button onClick={restart}>새 세계 시작 확정</button><button onClick={()=>setRestartConfirm(false)}>돌아가기</button></section></div>}
+ </div>;
 }
