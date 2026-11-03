@@ -27,7 +27,7 @@ function render(){
  const meta=node('div',undefined,'meta');meta.append(pill(r.status),node('span',r.build.version?'빌드 '+r.build.version:'원본 빌드 연결 미확인'),node('span',date(r.finished_at)),node('span','수집 소스 '+r.build.source_commit.slice(0,10)+(r.build.source_dirty?' · 수정본 포함':'')));summary.append(meta);
  if(r.kind==='archive')summary.append(node('p','과거 문서와 기존 이미지의 가져오기 기록입니다. 여기의 과거 검증 주장을 현재 다시 실행한 결과로 표시하지 않습니다.'));
  const facts=node('div',undefined,'facts');
- for(const [title,value] of [['현재 자동 검사',r.test_summary?r.test_summary.numPassedTests+' / '+r.test_summary.numTotalTests:'실행 기록 없음'],['보존 스크린샷',String(r.screenshots.length)],['수동 플레이','미실시']]){const f=node('div',undefined,'fact');f.append(node('span',title),node('strong',value));facts.append(f);}summary.append(facts);$('summary').replaceChildren(summary);
+ for(const [title,value] of [['단위 테스트',r.test_summary?r.test_summary.numPassedTests+' / '+r.test_summary.numTotalTests:'이번 회차 미실행'],['보존 스크린샷',String(r.screenshots.length)],['수동 플레이','미실시']]){const f=node('div',undefined,'fact');f.append(node('span',title),node('strong',value));facts.append(f);}summary.append(facts);$('summary').replaceChildren(summary);
  $('tabs').replaceChildren();for(const [key,label] of Object.entries(tabs)){const b=node('button',label,key===tab?'active':'');b.setAttribute('aria-pressed',String(key===tab));b.onclick=()=>{tab=key;render();};$('tabs').append(b);}
  const content=$('content');content.replaceChildren();
  if(tab==='overview'){
