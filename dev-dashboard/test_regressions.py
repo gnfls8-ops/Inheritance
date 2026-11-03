@@ -1,5 +1,5 @@
 """Isolated regressions: never reads/writes the private production request ledger."""
-import argparse, importlib.util, json, os, re, shutil, subprocess, sys, tempfile, unittest
+import argparse, importlib.util, json, os, re, shutil, subprocess, sys, tempfile, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
 BASE=Path(__file__).resolve().parent
@@ -70,4 +70,30 @@ class CollectorRegression(unittest.TestCase):
   self.module.collect(self.args);before=(self.module.DATA/'rounds/fixture-round/hashes.json').read_bytes()
   with self.assertRaisesRegex(ValueError,'불변 회차'):self.module.collect(self.args)
   self.assertEqual((self.module.DATA/'rounds/fixture-round/hashes.json').read_bytes(),before)
+class HandoffRegression(unittest.TestCase):
+ def package_fixture(self, detached=False):
+  with tempfile.TemporaryDirectory() as directory:
+   root=Path(directory);base=root/'dev-dashboard';(base/'private').mkdir(parents=True);(root/'release').mkdir()
+   shutil.copytree(BASE/'site',base/'site',ignore=shutil.ignore_patterns('data'))
+   (base/'site/data').mkdir()
+   for name in ['collect.py','export.py','prepare_handoff.py']:shutil.copyfile(BASE/name,base/name)
+   (base/'site/data/catalog.json').write_text(json.dumps({'rounds':[],'requests':[],'hosting':{'message':'fixture'}}))
+   for name,value in [('requests.json',[]),('next-plan.json',{})]:(base/'private'/name).write_text(json.dumps(value))
+   def git(*args):return subprocess.check_output(['git',*args],cwd=root,text=True,stderr=subprocess.PIPE).strip()
+   git('init','-b','work');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture')
+   commit=git('rev-parse','HEAD')
+   if detached:git('checkout','--detach',commit)
+   result=subprocess.run([sys.executable,str(base/'prepare_handoff.py')],cwd=root,capture_output=True,text=True)
+   self.assertEqual(result.returncode,0,result.stderr)
+   output=json.loads(result.stdout.splitlines()[-1]);archive=Path(output['package']);before=archive.read_bytes()
+   with zipfile.ZipFile(archive) as z:
+    meta=json.loads(z.read('HANDOFF.json'));doc=z.read('HANDOFF.md').decode()
+    self.assertEqual(meta['branch'],None if detached else 'work')
+    self.assertEqual(meta['source_commit'],commit)
+    self.assertIn(('detached HEAD' if detached else 'work')+' @ '+commit,doc)
+    self.assertNotIn('총괄 채팅에 파일로 첨부해야',doc)
+   again=subprocess.run([sys.executable,str(base/'prepare_handoff.py')],cwd=root,capture_output=True,text=True)
+   self.assertNotEqual(again.returncode,0);self.assertEqual(archive.read_bytes(),before)
+ def test_handoff_records_actual_work_branch(self):self.package_fixture()
+ def test_handoff_records_detached_head_without_inventing_branch(self):self.package_fixture(detached=True)
 if __name__=='__main__':unittest.main(verbosity=2)

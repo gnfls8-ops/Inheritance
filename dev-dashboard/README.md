@@ -79,7 +79,7 @@ Sites 게시와 실사용자의 비공개 접근 권한 확인은 미완료입�
 수집 후 `python dev-dashboard/export.py`를 실행하면 release/INHERITANCE-development-dashboard.html을 만듭니다. 문서·로그·이미지가 포함된 단일 HTML이며 다운로드 후 브라우저로 열 수 있습니다. 네트워크 요청이나 외부 게시를 하지 않습니다.
 
 ## 총괄 채팅으로 비공개 전달
-`python dev-dashboard/prepare_handoff.py`는 보존 파일을 검증한 뒤 기존 사이트·원본 이미지·회차 JSON·문서·요청 장부·오프라인 HTML을 ZIP으로 만듭니다. 소스 커밋별 파일명과 SHA-256을 출력합니다. 업로드하거나 게시하지 않습니다.
+`python dev-dashboard/prepare_handoff.py`는 보존 파일을 검증한 뒤 기존 사이트·원본 이미지·회차 JSON·문서·요청 장부·오프라인 HTML을 ZIP으로 만듭니다. 현재 체크아웃의 실제 브랜치와 커밋을 기록하고 소스 커밋별 파일명과 SHA-256을 출력합니다. detached HEAD에서는 branch를 null로 기록하며 문서에는 detached HEAD로 표시합니다. 업로드하거나 게시하지 않습니다.
 
 다른 채팅이 이 환경의 /workspace를 읽을 수 없고 인증된 전송 도구도 없다면 자료는 클라우드에 보존하고 텍스트 manifest를 결과에 포함합니다. 사용자에게 중간 파일 전달을 요청하지 않습니다. 로컬 경로나 127.0.0.1을 외부 전달 URL로 안내하지 않습니다. 이 채팅에는 비공개 첨부 업로드 도구가 없습니다.
 

@@ -1,4 +1,4 @@
-"""Package existing private evidence for a user-mediated handoff; never uploads or publishes."""
+"""Package existing private evidence for a private handoff; never uploads or publishes."""
 import datetime as dt, hashlib, json, shutil, subprocess, sys, tempfile, zipfile
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -10,6 +10,8 @@ def main():
  print(run(sys.executable,str(BASE/'export.py')))
  catalog=json.loads((BASE/'site/data/catalog.json').read_text())
  commit=run('git','rev-parse','HEAD')
+ branch=run('git','branch','--show-current') or None
+ branch_label=branch or 'detached HEAD'
  stamp=dt.datetime.now(ZoneInfo('Asia/Seoul'))
  name=f'INHERITANCE-sites-handoff-{stamp:%Y%m%d}-{commit[:7]}'
  with tempfile.TemporaryDirectory(prefix='handoff-',dir=BASE/'private') as temporary:
@@ -20,7 +22,7 @@ def main():
   for filename in ['requests.json','next-plan.json']:
    shutil.copyfile(BASE/'private'/filename,stage/'control'/filename)
   meta={'prepared_at_kst':stamp.isoformat(),'visibility':'private_transfer_only','published':False,
-   'repository':'gnfls8-ops/Inheritance','branch':'main','source_commit':commit,
+   'repository':'gnfls8-ops/Inheritance','branch':branch,'source_commit':commit,
    'source_paths':['dev-dashboard/site/index.html','dev-dashboard/site/dashboard.js','dev-dashboard/site/dashboard.css','dev-dashboard/collect.py','dev-dashboard/test_regressions.py','dev-dashboard/prepare_handoff.py'],
    'static_site_root':'site/','offline_dashboard':'dashboard.html','round_count':len(catalog['rounds']),
    'round_ids':[r['id'] for r in catalog['rounds']],'original_screenshots':'site/data/rounds/<round-id>/screenshots/',
@@ -29,10 +31,10 @@ def main():
   (stage/'HANDOFF.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
   (stage/'HANDOFF.md').write_text(f"""# INHERITANCE 기록실 · 비공개 전달
 준비 시각: {stamp:%Y-%m-%d %H:%M:%S} KST
-소스: gnfls8-ops/Inheritance main @ {commit}
+소스: gnfls8-ops/Inheritance {branch_label} @ {commit}
 
 ## 수신과 검증
-이 ZIP을 총괄 채팅에 파일로 첨부해야 합니다. /workspace 경로나 127.0.0.1 주소를 다른 실행 환경에서 읽을 수 있다고 가정하지 않습니다.
+인증된 비공개 전송 경로가 있으면 총괄이 가져가도록 연결합니다. 경로가 없으면 원본은 클라우드에 보존하고 결과 JSON과 핵심 보고를 인계합니다. 사용자에게 파일 전달을 요청하지 않습니다. /workspace 경로나 127.0.0.1 주소를 다른 실행 환경에서 읽을 수 있다고 가정하지 않습니다.
 압축을 푼 디렉터리에서 `sha256sum -c SHA256SUMS.txt`로 파일을 확인하세요.
 
 ## Sites 게시
