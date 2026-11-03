@@ -26,7 +26,7 @@ export function planAction(world:WorldState,h:HumanState,action:Activity,random:
   let candidates:Point[]=[];
   if(action==='gather') candidates=neighbors(world,h,8).filter(p=>world.resources[p.y*world.map.width+p.x]>0);
   if(action==='socialize') {
-    const other=world.humans.filter(o=>o.id!==h.id&&distance(h.position,o.position)<=8)
+    const other=world.humans.filter(o=>o.alive&&o.id!==h.id&&distance(h.position,o.position)<=8)
       .sort((a,b)=>distance(h.position,a.position)-distance(h.position,b.position)||(a.id<b.id?-1:a.id>b.id?1:0));
     for(const person of other){const path=findPath(world.map,h.position,person.position);if(path){h.targetHumanId=person.id;h.path=path;h.action=action;return true;}}
     return false;
@@ -54,12 +54,12 @@ export function stepHuman(world:WorldState,h:HumanState,random:SeededRandom) {
   else if(h.hunger<45)h.health=clamp(h.health+1);
   if(h.control==='auto'&&(h.path.length===0||h.hunger>75&&h.action!=='gather')) {
     const candidates=neighbors(world,h,8);
-    const scores=scoreActions(h,candidates.some(p=>world.resources[p.y*world.map.width+p.x]>0),world.humans.some(o=>o.id!==h.id&&distance(h.position,o.position)<=8));
+    const scores=scoreActions(h,candidates.some(p=>world.resources[p.y*world.map.width+p.x]>0),world.humans.some(o=>o.alive&&o.id!==h.id&&distance(h.position,o.position)<=8));
     const order=(Object.keys(scores) as Activity[]).sort((a,b)=>scores[b]-scores[a]);
     for(const action of order)if(planAction(world,h,action,random)){h.reason=`${ACTION_LABELS[action]} 효용 ${Math.round(scores[action])} · 욕구와 기질 반영`;break;}
   }
   if(h.action==='socialize'&&h.targetHumanId){
-    const target=world.humans.find(o=>o.id===h.targetHumanId);
+    const target=world.humans.find(o=>o.alive&&o.id===h.targetHumanId);
     if(!target||distance(h.position,target.position)>12){h.reason='교류 상대가 멀어져 자율 행동으로 복귀';finish(h);return;}
     const path=findPath(world.map,h.position,target.position);if(path)h.path=path;
   }
@@ -76,7 +76,7 @@ export function stepHuman(world:WorldState,h:HumanState,random:SeededRandom) {
   if(h.action==='rest'){h.fatigue=clamp(h.fatigue-30);if(h.hunger<70)h.health=clamp(h.health+4);record(world,h,'휴식하며 기력을 회복');}
   if(h.action==='explore')record(world,h,`새로운 땅을 탐험 (${h.position.x}, ${h.position.y})`);
   if(h.action==='socialize'){
-    const other=world.humans.find(o=>o.id===h.targetHumanId);
+    const other=world.humans.find(o=>o.alive&&o.id===h.targetHumanId);
     if(other&&distance(h.position,other.position)<=1){
       for(const [a,b] of [[h,other],[other,h]]){const rel=a.relationships[b.id]??{familiarity:0,trust:0};a.relationships[b.id]={familiarity:clamp(rel.familiarity+8),trust:clamp(rel.trust+5)};a.loneliness=clamp(a.loneliness-30);}
       record(world,h,`${other.name}와 교류하며 신뢰를 쌓음`);

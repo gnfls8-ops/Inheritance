@@ -14,7 +14,7 @@ describe('isometric map',()=>{
     const a=generateMap(new SeededRandom(2026));expect(a).toEqual(generateMap(new SeededRandom(2026)));
     expect(a.tiles).toHaveLength(48*48);expect(new Set(a.tiles).size).toBe(4);
     expect(a).not.toEqual(generateMap(new SeededRandom(2027)));
-    const state=new Simulation(2026).snapshot();expect(state.world.humans).toHaveLength(12);
+    const state=started(2026).snapshot();expect(state.world.humans).toHaveLength(12);
     for(const h of state.world.humans)expect(walkable(a,h.position)).toBe(true);
   });
 });
@@ -33,21 +33,23 @@ describe('pathfinding',()=>{
 });
 describe('movement commands',()=>{
   it('queues while paused, moves one tile per step and replays identically',()=>{
-    const a=new Simulation(2026),b=new Simulation(2026);
+    const a=started(2026),b=started(2026);
     for(const sim of [a,b]){
       expect(sim.move('human-1',{x:25,y:25})).toBe(true);
       expect(sim.snapshot().world.humans[0].position).toEqual({x:21,y:22});
       sim.step();expect(sim.snapshot().world.humans[0].path).toHaveLength(6);
       for(let i=0;i<6;i++)sim.step();
       expect(sim.snapshot().world.humans[0].position).toEqual({x:25,y:25});
-      expect(sim.snapshot().commands[0]).toEqual({tick:0,type:'move',humanId:'human-1',target:{x:25,y:25}});
+      expect(sim.snapshot().commands[1]).toEqual({tick:0,type:'move',humanId:'human-1',target:{x:25,y:25}});
     }
     expect(a.snapshot()).toEqual(b.snapshot());
   });
   it('does not record rejected commands and replaces an existing path',()=>{
-    const sim=new Simulation();expect(sim.move('missing',{x:22,y:22})).toBe(false);
-    expect(sim.move('human-1',{x:-1,y:0})).toBe(false);expect(sim.snapshot().commands).toEqual([]);
+    const sim=started();expect(sim.move('missing',{x:22,y:22})).toBe(false);
+    expect(sim.move('human-1',{x:-1,y:0})).toBe(false);expect(sim.snapshot().commands).toHaveLength(1);
     sim.move('human-1',{x:25,y:25});sim.move('human-1',{x:22,y:22});sim.step();
     expect(sim.snapshot().world.humans[0].position).toEqual({x:22,y:22});expect(sim.snapshot().world.humans[0].path).toEqual([]);
   });
 });
+
+function started(seed=2026){const sim=new Simulation(seed);sim.choosePlayer('human-1');return sim;}

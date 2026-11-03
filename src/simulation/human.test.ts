@@ -3,7 +3,7 @@ import { Simulation } from './Simulation';
 import { planAction,scoreActions,stepHuman } from './human';
 import { SeededRandom } from './random';
 function fixture(){
-  const world=new Simulation(2026).snapshot().world;
+  const world=started(2026).snapshot().world;
   const h=world.humans[0];
   return {world,h,random:new SeededRandom(42)};
 }
@@ -57,26 +57,26 @@ describe('Utility AI and needs',()=>{
 });
 describe('player intervention and multi-day simulation',()=>{
   it('queues one action, cancels it without time advancing, and logs commands',()=>{
-    const sim=new Simulation();expect(sim.act('human-1','explore')).toBe(true);
+    const sim=started();expect(sim.act('human-1','explore')).toBe(true);
     let h=sim.snapshot().world.humans[0];expect(h.control).toBe('player');expect(h.path.length).toBeGreaterThan(0);
     expect(sim.resumeAuto('human-1')).toBe(true);h=sim.snapshot().world.humans[0];expect(h.control).toBe('auto');expect(h.path).toEqual([]);
-    expect(sim.snapshot().world.day).toBe(0);expect(sim.snapshot().commands.map(c=>c.type)).toEqual(['action','auto']);
+    expect(sim.snapshot().world.day).toBe(0);expect(sim.snapshot().commands.map(c=>c.type)).toEqual(['choose','action','auto']);
     expect(sim.act('missing','rest')).toBe(false);expect(sim.resumeAuto('missing')).toBe(false);
   });
   it('creates varied reproducible traits, and autonomous people do not all stand still',()=>{
-    const sim=new Simulation(42), before=sim.snapshot();
+    const sim=started(42), before=sim.snapshot();
     expect(new Set(before.world.humans.map(h=>JSON.stringify(h.traits))).size).toBe(12);
     for(let i=0;i<20;i++)sim.step();
     const after=sim.snapshot();expect(after.world.humans.some((h,i)=>JSON.stringify(h.position)!==JSON.stringify(before.world.humans[i].position))).toBe(true);
     expect(after.world.activityLog.length).toBeGreaterThan(0);
   });
   it('replays a full year with player interventions and keeps state bounded',()=>{
-    const a=new Simulation(2026),b=new Simulation(2026);
+    const a=started(2026),b=started(2026);
     for(let day=0;day<365;day++){
       for(const sim of [a,b]){
         if(day%23===0)sim.act('human-1','rest');
-        if(day%31===0)sim.act('human-2','explore');
-        if(day%47===0)sim.resumeAuto('human-2');
+        if(day%31===0)sim.act('human-1','explore');
+        if(day%47===0)sim.resumeAuto('human-1');
         sim.step();
       }
     }
@@ -86,3 +86,5 @@ describe('player intervention and multi-day simulation',()=>{
     world.resources.forEach((n,i)=>{expect(n).toBeGreaterThanOrEqual(0);expect(n).toBeLessThanOrEqual(world.map.tiles[i]==='forest'?6:3);});
   });
 });
+
+function started(seed=2026){const sim=new Simulation(seed);sim.choosePlayer('human-1');return sim;}

@@ -27,7 +27,7 @@ export function resolveTechnology(w:WorldState,h:HumanState,random:SeededRandom)
   else{h.health=Math.max(0,h.health-2);log(w,`${h.name}: ${tech.name} 실험 실패 · 식량과 기력 소모`);}
  }else{
   if(!h.knowledge.includes(order.id))return;
-  const target=w.humans.filter(o=>o.id!==h.id&&!o.knowledge.includes(order.id)&&Math.abs(o.position.x-h.position.x)+Math.abs(o.position.y-h.position.y)<=3).sort((a,b)=>a.id<b.id?-1:1)[0];
+  const target=w.humans.filter(o=>o.alive&&o.id!==h.id&&!o.knowledge.includes(order.id)&&Math.abs(o.position.x-h.position.x)+Math.abs(o.position.y-h.position.y)<=3).sort((a,b)=>a.id<b.id?-1:1)[0];
   if(!target){log(w,`${h.name}: 가까운 전승 대상 없음 · 다른 인물 근처로 이동하세요`);return;}
   const trust=target.relationships[h.id]?.trust??0;
   const acceptance=Math.max(.05,Math.min(.95,.25+target.traits.curiosity*.003+target.traits.sociability*.002+trust*.003-target.traits.stability*.002));
@@ -38,9 +38,10 @@ export function resolveTechnology(w:WorldState,h:HumanState,random:SeededRandom)
 }
 export function updateTechnology(w:WorldState,random:SeededRandom){
  for(const tech of TECHNOLOGIES){
-  let holders=w.humans.filter(h=>h.knowledge.includes(tech.id));
+  let holders=w.humans.filter(h=>h.alive&&h.knowledge.includes(tech.id));
   if(holders.length===1){const h=holders[0];if(w.day-(h.learnedAt[tech.id]??w.day)>=60&&random.next()<.02){h.knowledge=h.knowledge.filter(k=>k!==tech.id);log(w,`${tech.name}: 전승되지 않은 지식 소실`);holders=[];}}
-  const old=w.technologies[tech.id];const adopted=holders.length>=Math.ceil(w.humans.length/2)&&holders.length>0;
+  const old=w.technologies[tech.id];const adopted=holders.length>=Math.ceil(w.humans.filter(h=>h.alive).length/2)&&holders.length>0;
+  if(old.holders>0&&holders.length===0)log(w,`${tech.name}: 살아 있는 보유자가 없어 지식 소실`);
   if(adopted!==old.adopted)log(w,`${tech.name}: ${adopted?'공동체 정착':'공동체 정착 해제'}`);
   w.technologies[tech.id]={holders:holders.length,adopted,everDiscovered:old.everDiscovered||holders.length>0};
  }

@@ -20,27 +20,27 @@ describe('seeded random', () => {
     expect(random.next()).toBe(resumed.next());
   });
   it('rejects invalid seeds', () => {
-    for (const seed of [-1, 0x100000000, NaN, 1.2]) expect(() => new Simulation(seed)).toThrow();
+    for (const seed of [-1, 0x100000000, NaN, 1.2]) expect(() => started(seed)).toThrow();
   });
 });
 describe('daily simulation', () => {
   it('replays identical daily commands and stores zero-based tick numbers', () => {
-    const a = new Simulation(42), b = new Simulation(42);
+    const a = started(42), b = started(42);
     for (let i=0; i<365; i++) { a.step(); b.step(); }
     expect(a.snapshot()).toEqual(b.snapshot());
     expect(a.snapshot().world.day).toBe(365);
-    expect(a.snapshot().commands[364]).toEqual({tick:364,type:'wait'});
-    expect(a.snapshot().randomState).not.toBe(new Simulation(42).snapshot().randomState);
+    expect(a.snapshot().commands[365]).toEqual({tick:364,type:'wait'});
+    expect(a.snapshot().randomState).not.toBe(started(42).snapshot().randomState);
   });
   it('isolates snapshots from external mutation', () => {
-    const sim = new Simulation(); const state = sim.snapshot();
+    const sim = started(); const state = sim.snapshot();
     state.world.day = 99; state.commands.push({tick:0,type:'wait'});
-    expect(sim.snapshot().world.day).toBe(0); expect(sim.snapshot().commands).toHaveLength(0);
+    expect(sim.snapshot().world.day).toBe(0); expect(sim.snapshot().commands).toHaveLength(1);
   });
 });
 describe('game clock', () => {
   it('starts paused and advances only complete days', () => {
-    const clock = new GameClock(), sim = new Simulation();
+    const clock = new GameClock(), sim = started();
     expect(clock.advance(10000, () => sim.step())).toBe(0);
     clock.setPaused(false);
     expect(clock.advance(999, () => sim.step())).toBe(0);
@@ -49,7 +49,7 @@ describe('game clock', () => {
   });
   it.each([1,2,4] as const)('runs at %s× independent of frame partition', speed => {
     const a = new GameClock(), b = new GameClock();
-    const sa = new Simulation(7), sb = new Simulation(7);
+    const sa = started(7), sb = started(7);
     for (const c of [a,b]) { c.setPaused(false); c.setSpeed(speed); }
     a.advance(10000, () => sa.step());
     for (let i=0;i<100;i++) b.advance(100, () => sb.step());
@@ -71,3 +71,5 @@ describe('game clock', () => {
     for (const ms of [-1,NaN,Infinity]) expect(()=>c.advance(ms,()=>{})).toThrow();
   });
 });
+
+function started(seed=2026){const sim=new Simulation(seed);sim.choosePlayer('human-1');return sim;}

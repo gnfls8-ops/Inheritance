@@ -40,12 +40,13 @@ export async function createRenderer(host: HTMLElement, initial: SimulationSnaps
     }
   }
   function drawPeople() {
-    const ids=new Set(state.world.humans.map(h=>h.id));
+    const ids=new Set(state.world.humans.filter(h=>h.alive).map(h=>h.id));
     for(const [id,node] of sprites) if(!ids.has(id)){node.destroy({children:true});sprites.delete(id);}
-    for(const [i,h] of state.world.humans.entries()) {
+    for(const [i,h] of state.world.humans.filter(h=>h.alive).entries()) {
       let node=sprites.get(h.id);
       if(!node){node=new Container();node.addChild(new Graphics());people.addChild(node);sprites.set(h.id,node);}
       const g=node.children[0] as Graphics;g.clear();
+      if(h.id===state.player.humanId)g.circle(0,-40,3).fill(0x8bd8ef);
       g.ellipse(0,0,7,3).fill({color:0x15231b,alpha:.5});
       // Adult proportions: head 4px, body height 26px, simple layered clothing.
       if(h.id===selected) g.ellipse(0,0,10,5).stroke({color:0xf0d68c,width:2});
@@ -81,7 +82,7 @@ export async function createRenderer(host: HTMLElement, initial: SimulationSnaps
     const p=local(e);pointers.delete(e.pointerId);
     if(e.type==='pointerup'&&!moved&&origin){
       const world={x:(p.x-scene.x)/scene.scale.x,y:(p.y-scene.y)/scene.scale.y};
-      const human=[...state.world.humans].sort((a,b)=>(b.position.x+b.position.y)-(a.position.x+a.position.y)).find(h=>{const at=toIso(h.position);return Math.abs(at.x-world.x)<11&&world.y>=at.y-32&&world.y<=at.y+6;});
+      const human=[...state.world.humans.filter(h=>h.alive)].sort((a,b)=>(b.position.x+b.position.y)-(a.position.x+a.position.y)).find(h=>{const at=toIso(h.position);return Math.abs(at.x-world.x)<11&&world.y>=at.y-32&&world.y<=at.y+6;});
       if(human)onSelect(human.id);else onMove(fromIso(world));
     }
     moved=true;distance=0;if(!pointers.size)origin=null;
