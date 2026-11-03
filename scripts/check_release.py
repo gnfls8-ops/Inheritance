@@ -9,7 +9,7 @@ with sync_playwright() as p:
  context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,device_scale_factor=2)
  page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.add_init_script("window.audioContexts=[];const AC=window.AudioContext;window.AudioContext=class extends AC {constructor(...args){super(...args);window.audioContexts.push(this);}};")
- page.goto(url,wait_until='networkidle');page.get_by_role('button',name='아라의 삶 시작',exact=True).click();page.locator('canvas').wait_for();assert '0.6.0' in page.locator('.build').inner_text()
+ page.goto(url,wait_until='networkidle');page.get_by_role('button',name='아라의 삶 시작',exact=True).click();page.locator('canvas').wait_for();assert '0.7.0' in page.locator('.build').inner_text()
  page.wait_for_timeout(2300)
  saved=page.evaluate("JSON.parse(localStorage.getItem('inheritance.autosave.v3'))")
  assert saved['player']['humanId']=='human-1'

@@ -6,6 +6,7 @@ export const TECHNOLOGIES = [
  {id:'fire',name:'불 관리',condition:'3일 경과 · 방문한 땅 3칸',effect:'식사 시 허기 4 추가 감소',cost:1,chance:.55},
  {id:'stone',name:'석기 제작',condition:'3칸 이내 암석',effect:'한 번에 최대 4개 채집',cost:1,chance:.65},
  {id:'storage',name:'식량 저장',condition:'소지 식량 2개 이상',effect:'7일마다 발생하는 식량 1개 부패 방지',cost:1,chance:.6},
+ {id:'cultivation',name:'씨앗 재배',condition:'식량 저장 지식 · 곡물 발견 · 완성된 거처',effect:'밭을 가꾸어 30일 후 수확',cost:1,chance:.7},
 ] as const;
 export type TechnologyId=typeof TECHNOLOGIES[number]['id'];
 export interface TechOrder {kind:'experiment'|'teach';id:TechnologyId;targetId?:string}
@@ -14,7 +15,9 @@ export interface TechRecord {day:number;text:string}
 export function canExperiment(w:WorldState,h:HumanState,id:TechnologyId):boolean {
  if(!h.alive||h.knowledge.includes(id)||h.food<1||h.fatigue>85)return false;
  if(id==='fire')return w.day>=3&&h.visited.length>=3;
+ if(id==='cultivation')return h.knowledge.includes('storage')&&w.landscape.sites.some(s=>s.kind==='seeds'&&s.discoverers.includes(h.id))&&w.landscape.structures.some(s=>s.kind==='shelter'&&s.progress>=3);
  if(id==='storage')return h.food>=2;
+ if(id==='stone'&&w.landscape.sites.some(s=>s.kind==='flint'&&s.discoverers.includes(h.id)))return true;
  return w.map.tiles.some((t,i)=>t==='rock'&&Math.abs(i%w.map.width-h.position.x)+Math.abs(Math.floor(i/w.map.width)-h.position.y)<=3);
 }
 function log(w:WorldState,text:string){w.technologyLog.push({day:w.day+1,text});if(w.technologyLog.length>200)w.technologyLog.shift();}

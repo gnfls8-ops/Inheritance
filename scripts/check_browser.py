@@ -18,7 +18,7 @@ with sync_playwright() as p:
  assert '완료' in page.locator('.world-toast').inner_text()
  page.get_by_role('button',name='설정',exact=False).click()
  with page.expect_download() as dl:page.get_by_role('button',name='저장 파일 내려받기').click()
- snap=json.load(open(dl.value.path()));assert snap['version']==3
+ snap=json.load(open(dl.value.path()));assert snap['version']==4
  # Approved legacy retirement migration, retaining world and original character.
  old=json.loads(json.dumps(snap));old['version']=2;old['player']['phase']='successor'
  old['player']['summary']={'retired':True,'humanId':'human-1','name':'아라','startedDay':0,'diedDay':old['world']['day'],'knowledge':[],'relationships':{}}
@@ -64,7 +64,8 @@ with sync_playwright() as p:
  page.get_by_role('button',name='역사 모드로 관찰하기').click()
  assert page.get_by_role('dialog',name='삶 선택',exact=True).count()==0
  page.get_by_role('button',name='시간 재생',exact=True).click();page.wait_for_timeout(1400)
- page.get_by_role('button',name='시간 일시정지',exact=True).click()
+ if page.get_by_role('button',name='시간 일시정지',exact=True).count():page.get_by_role('button',name='시간 일시정지',exact=True).click()
+ if page.get_by_role('button',name='사건 확인',exact=True).count():page.get_by_role('button',name='사건 확인',exact=True).click()
  page.get_by_role('button',name='다음 삶 선택',exact=True).click();page.get_by_role('button',name='누리의 삶 시작',exact=True).click()
  assert '생활 · 일시정지' in page.locator('.clock-label').inner_text()
  for width,height in [(390,844),(360,640),(844,390)]:

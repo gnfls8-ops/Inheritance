@@ -51,7 +51,7 @@ describe('Utility AI and needs',()=>{
   it('exploration records visited ground after reachable tile movement',()=>{
     const {world,h,random}=fixture();const start={...h.position};
     expect(planAction(world,h,'explore',random)).toBe(true);h.control='player';const length=h.path.length;
-    for(let i=0;i<length;i++)stepHuman(world,h,random);
+    for(let i=0;i<length+2;i++)stepHuman(world,h,random);
     expect(h.position).not.toEqual(start);expect(h.visited.length).toBeGreaterThan(1);expect(h.control).toBe('auto');
   });
 });

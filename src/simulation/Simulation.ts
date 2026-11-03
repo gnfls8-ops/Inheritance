@@ -1,10 +1,11 @@
+import {initialLandscape,landscapeDay} from './landscape';
 import {populationDay} from './population';
 import {remember,nameOf,withParticle} from './chronicle';
 import {validateSnapshot} from './validation';
 import {TIME_MODES,initialTimeline,dayChance} from './time';
 import type {TimeMode} from './time';
 import {historyDay} from './history';
-import { canExperiment, resolveTechnology, updateTechnology } from './technology';
+import { TECHNOLOGIES, canExperiment, resolveTechnology, updateTechnology } from './technology';
 import type { TechOrder } from './technology';
 import type { Activity, SimulationSnapshot, WorldState } from './model';
 import { SeededRandom } from './random';
@@ -17,33 +18,36 @@ export class Simulation {
   private data: SimulationSnapshot;
   constructor(seed = 2026) {
     this.random = new SeededRandom(seed);
+    const map=generateMap(this.random);
     const world: WorldState = {
-      legacy:{people:{},transmissions:[]},era: 'prehistory', day: 0, map: generateMap(this.random),
-      technologies:{fire:{holders:0,adopted:false,everDiscovered:false},stone:{holders:0,adopted:false,everDiscovered:false},storage:{holders:0,adopted:false,everDiscovered:false}},technologyLog:[],resources: [], activityLog: [],
+      landscape:initialLandscape(map),
+      legacy:{people:{},transmissions:[]},era: 'prehistory', day: 0, map,
+      technologies:{cultivation:{holders:0,adopted:false,everDiscovered:false},fire:{holders:0,adopted:false,everDiscovered:false},stone:{holders:0,adopted:false,everDiscovered:false},storage:{holders:0,adopted:false,everDiscovered:false}},technologyLog:[],resources: [], activityLog: [],
       region: { id: 'valley', name: '이름 없는 골짜기', humanIds: [] }, humans: [],
     };
     world.resources=world.map.tiles.map(t=>t==='forest'?6:t==='grass'?3:0);
     for (let i=0;i<12;i++) {
       const id = `human-${i+1}`;
-      world.humans.push({id,name:['아라','누리','이솔','마루','가람','여울','하람','다온','나래','도담','해솔','새나'][i],position:{x:21+i%4,y:22+Math.floor(i/4)},path:[],ageDays:(18+i*2)*365,command:null,socialCooldown:{},deathCause:null,alive:true,deathDay:null,health:100,hunger:15,fatigue:10,loneliness:20,food:2,traits:{curiosity:Math.floor(this.random.next()*101),stability:Math.floor(this.random.next()*101),sociability:Math.floor(this.random.next()*101),riskTaking:Math.floor(this.random.next()*101)},techOrder:null,learnedAt:{},knowledge:[],relationships:{},action:'idle',control:'auto',targetHumanId:null,visited:[(22+Math.floor(i/4))*48+21+i%4],reason:'자율 행동 대기'});
+      world.humans.push({id,name:['아라','누리','이솔','마루','가람','여울','하람','다온','나래','도담','해솔','새나'][i],position:{x:21+i%4,y:22+Math.floor(i/4)},path:[],ageDays:(18+i*2)*365,work:null,command:null,socialCooldown:{},deathCause:null,alive:true,deathDay:null,health:100,hunger:15,fatigue:10,loneliness:20,food:2,traits:{curiosity:Math.floor(this.random.next()*101),stability:Math.floor(this.random.next()*101),sociability:Math.floor(this.random.next()*101),riskTaking:Math.floor(this.random.next()*101)},techOrder:null,learnedAt:{},knowledge:[],relationships:{},action:'idle',control:'auto',targetHumanId:null,visited:[(22+Math.floor(i/4))*48+21+i%4],reason:'자율 행동 대기'});
       world.region.humanIds.push(id);world.legacy.people[id]={name:world.humans.at(-1)!.name,entries:[]};
     }
-    this.data = { player:{humanId:null,phase:'choose',startedDay:0,summary:null}, timeline:initialTimeline(), version: 3, seed, randomState: this.random.state, world, commands: [] };
+    this.data = { player:{humanId:null,phase:'choose',startedDay:0,summary:null}, timeline:initialTimeline(), version: 4, seed, randomState: this.random.state, world, commands: [] };
   }
   static restore(raw:unknown):Simulation {
     if(!raw||typeof raw!=='object')throw new Error('잘못된 스냅샷');
     const value=structuredClone(raw) as SimulationSnapshot;
     const version=(raw as {version?:number}).version;
-    if(![1,2,3].includes(version??0)||!value.world||!Array.isArray(value.world.humans)||!value.player||!Array.isArray(value.commands)||!Number.isInteger(value.world.day)||value.world.day<0)throw new Error('지원하지 않는 저장 데이터');
-    if(version===1){value.timeline=initialTimeline();value.timeline.nextHuman=Math.max(13,...value.world.humans.map(h=>Number(h.id.replace('human-',''))+1).filter(Number.isFinite));value.version=3;}
-    if(version!==3){
-      value.version=3;value.world.legacy??={people:{},transmissions:[]};value.timeline.requestUntil??={};
+    if(![1,2,3,4].includes(version??0)||!value.world||!Array.isArray(value.world.humans)||!value.player||!Array.isArray(value.commands)||!Number.isInteger(value.world.day)||value.world.day<0)throw new Error('지원하지 않는 저장 데이터');
+    if(version===1){value.timeline=initialTimeline();value.timeline.nextHuman=Math.max(13,...value.world.humans.map(h=>Number(h.id.replace('human-',''))+1).filter(Number.isFinite));value.version=4;}
+    if(version===1||version===2){
+      value.version=4;value.world.legacy??={people:{},transmissions:[]};value.timeline.requestUntil??={};
       for(const h of value.world.humans){h.command??=null;h.socialCooldown??={};h.deathCause??=h.alive?null:h.ageDays>=80*365?'노령':'건강 악화 (이전 기록)';value.world.legacy.people[h.id]??={name:h.name,entries:[]};}
       for(const e of value.world.activityLog)e.humanName??=nameOf(value.world,e.humanId);
       const old=value.world.humans.find(h=>h.id===value.player.humanId);
       if(value.player.summary?.retired&&old?.alive){value.player.phase='playing';value.player.summary=null;value.timeline.mode='daily';}
       else if(value.player.summary?.retired&&old&&!old.alive){value.player.summary.retired=false;value.player.summary.diedDay=old.deathDay??value.world.day;value.player.summary.cause=old.deathCause??'이전 기록';}
     }
+    if(version!==4){value.version=4;value.world.landscape=initialLandscape(value.world.map);value.world.technologies.cultivation={holders:0,adopted:false,everDiscovered:false};for(const h of value.world.humans)h.work=null;}
     if(!value.timeline||!['daily','life','history'].includes(value.timeline.mode))throw new Error('잘못된 시간 상태');
     validateSnapshot(value);
     const sim=new Simulation(value.seed);sim.random=new SeededRandom(value.randomState);sim.data=value;return sim;
@@ -138,29 +142,29 @@ export class Simulation {
     if (!human||!this.controls(humanId)) return false;
     const path = findPath(this.data.world.map, human.position, target);
     if (!path) return false;
-    human.techOrder=null;human.path = path; human.control='player';human.action='move';human.targetHumanId=null;human.reason='플레이어 이동 지시';this.feedback(human,'이동');
+    human.work=null;human.techOrder=null;human.path = path; human.control='player';human.action='move';human.targetHumanId=null;human.reason='플레이어 이동 지시';this.feedback(human,'이동');
     this.data.commands.push({tick:this.data.world.day,type:'move',humanId,target:{...target}});
     return true;
   }
   act(humanId:string,action:Activity):boolean {
     const human=this.data.world.humans.find(h=>h.id===humanId);
-    if(!human||!this.controls(humanId)||!['gather','explore','rest','socialize'].includes(action))return false;
+    if(!human||!this.controls(humanId)||!['gather','explore','rest','socialize','fish','build','tend'].includes(action))return false;
     const previous=structuredClone(human), previousRandom=this.random.state;
     if(!planAction(this.data.world,human,action,this.random)){Object.assign(human,previous);this.random=new SeededRandom(previousRandom);return false;}
-    human.techOrder=null;human.control='player';human.reason='플레이어 행동 지시';this.feedback(human,({gather:'채집',explore:'탐험',rest:'휴식',socialize:'교류'})[action]);
+    human.techOrder=null;human.control='player';human.reason='플레이어 행동 지시';this.feedback(human,({gather:'채집',explore:'탐험',rest:'휴식',socialize:'교류',fish:'낚시',build:'거처 짓기',tend:'밭 돌보기'})[action]);
     this.data.commands.push({tick:this.data.world.day,type:'action',humanId,action});
     this.data.randomState=this.random.state;return true;
   }
   resumeAuto(humanId:string):boolean {
     const human=this.data.world.humans.find(h=>h.id===humanId);if(!human||!this.controls(humanId))return false;
-    human.techOrder=null;human.control='auto';human.path=[];human.action='idle';human.targetHumanId=null;human.reason='지시 취소 · 자율 행동 복귀';if(human.command)human.command={...human.command,status:'cancelled',text:'지시 취소 · 자율 행동 복귀',day:this.data.world.day};
+    human.work=null;human.techOrder=null;human.control='auto';human.path=[];human.action='idle';human.targetHumanId=null;human.reason='지시 취소 · 자율 행동 복귀';if(human.command)human.command={...human.command,status:'cancelled',text:'지시 취소 · 자율 행동 복귀',day:this.data.world.day};
     this.data.commands.push({tick:this.data.world.day,type:'auto',humanId});return true;
   }
   technology(humanId:string,order:TechOrder):boolean {
     const h=this.data.world.humans.find(h=>h.id===humanId);
-    if(!h||!this.controls(humanId)||!['fire','stone','storage'].includes(order.id)||!['experiment','teach'].includes(order.kind))return false;
+    if(!h||!this.controls(humanId)||!['fire','stone','storage','cultivation'].includes(order.id)||!['experiment','teach'].includes(order.kind))return false;
     if(order.kind==='experiment'?!canExperiment(this.data.world,h,order.id):!h.knowledge.includes(order.id))return false;
-    h.techOrder={...order};h.path=[];h.control='player';h.action='idle';h.reason=order.kind==='experiment'?'실험 예약':'지식 전파 예약';this.feedback(h,order.kind==='experiment'?'실험':'전파');
+    h.work=null;h.techOrder={...order};h.path=[];h.control='player';h.action='idle';h.reason=order.kind==='experiment'?'실험 예약':'지식 전파 예약';this.feedback(h,order.kind==='experiment'?'실험':'전파');
     this.data.commands.push({tick:this.data.world.day,type:'technology',humanId,order:{...order}});return true;
   }
   step():SimulationSnapshot {this.tick();return this.snapshot();}
@@ -170,6 +174,10 @@ export class Simulation {
     if(this.data.timeline.mode==='history')historyDay(this.data);
     else for (const human of this.data.world.humans) {
       if(!human.alive)continue;
+      if(human.control==='auto'&&!human.work&&this.data.world.day%30===29&&human.food>=3&&human.traits.curiosity>=50){
+        const tech=TECHNOLOGIES.find(t=>canExperiment(this.data.world,human,t.id));
+        if(tech&&dayChance(this.data.seed,this.data.world.day,Number(human.id.replace('human-',''))+600)<.2)human.techOrder={kind:'experiment',id:tech.id};
+      }
       if(human.techOrder){resolveTechnology(this.data.world,human,this.random);human.control='player';}
       if(human.health>0)stepHuman(this.data.world,human,this.random);
       if((this.data.world.day+1)%7===0&&!human.knowledge.includes('storage')&&human.food>0)human.food--; 
@@ -177,7 +185,7 @@ export class Simulation {
     populationDay(this.data);
     updateTechnology(this.data.world,this.random);
     this.data.world.day += 1;
-    if(this.data.world.day%7===0)this.data.world.resources=this.data.world.resources.map((amount,i)=>Math.min(this.data.world.map.tiles[i]==='forest'?6:3,amount+(this.data.world.map.tiles[i]==='forest'||this.data.world.map.tiles[i]==='grass'?(this.data.world.technologies.storage.adopted?2:1):0)));
+    landscapeDay(this.data);
     this.events();
     this.data.randomState = this.random.state;
   }

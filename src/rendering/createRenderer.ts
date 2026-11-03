@@ -1,3 +1,5 @@
+import {ACTION_LABELS} from '../simulation/human';
+import {readyCrop} from '../simulation/landscape';
 import { Application, Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
 import type { Spritesheet } from 'pixi.js';
 import type { SimulationSnapshot, Speed } from '../simulation/model';
@@ -20,6 +22,7 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
  let state=initial,selected:string|null=null,playback:Playback={paused:true,speed:1},following=false,elapsed=0,visualDay=initial.world.day;
  let mapSignature=JSON.stringify(initial.world.map),previousSeed=initial.seed;
  const actors=new Map<string,Actor>(),trees:Sprite[]=[],ripples:Sprite[]=[],props:Container[]=[],fires:Sprite[]=[];
+ const constructions=new Map<string,Sprite>(),landmarks=new Map<string,Sprite>();
  const treeBase=new Map<Sprite,number>();
  function sprite(key:string,x:number,y:number,anchorX=.5,anchorY=1){const s=new Sprite(sheet.textures[key]);s.anchor.set(anchorX,anchorY);s.position.set(x,y);return s;}
  function drawWorld(){
@@ -45,13 +48,24 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
     const rock=sprite(`rock${variation}`,p.x,p.y+5,.5,.85);rock.scale.set(.7);rock.zIndex=p.y;depth.addChild(rock);props.push(rock);
    }else if(type==='grass'&&(x*19+y*11)%13===0){const shrub=sprite(`shrub${variation%3}`,p.x,p.y,.5,.85);shrub.scale.set(.48);shrub.zIndex=p.y;depth.addChild(shrub);props.push(shrub);}
   }
-  // Hide shelters against impassable rocks, so people never walk through the scenery.
-  const camp=state.world.map.tiles.map((t,i)=>({t,x:i%48,y:Math.floor(i/48)})).filter(p=>p.t==='rock'&&Math.abs(p.x-23)+Math.abs(p.y-23)<9).slice(0,2);
-  for(const [i,tile] of camp.entries()){const p=toIso(tile);const shelter=sprite(`shelter${i}`,p.x,p.y+6,.5,.9);shelter.scale.set(.75);shelter.zIndex=p.y+1;depth.addChild(shelter);props.push(shelter);}
   for(const tile of [{x:20,y:25},{x:25,y:21}]){const p=toIso(tile),fire=sprite('fire0',p.x,p.y,.5,.85);fire.scale.set(.8);fire.zIndex=p.y;depth.addChild(fire);fires.push(fire);props.push(fire);}
   ground.updateCacheTexture();
  }
  function reconcile(reset=false){
+  const w=state.world;
+  const liveIds=new Set(w.landscape.structures.map(b=>b.id));
+  for(const [id,prop] of constructions)if(!liveIds.has(id)){prop.destroy();constructions.delete(id);}
+  for(const building of w.landscape.structures){
+   const p=toIso(building.position),key=building.kind==='shelter'?(building.progress>=3?'shelter0':'scaffold'):building.plantedDay===null?'crop0':readyCrop(w,building)?'crop2':'crop1';
+   let prop=constructions.get(building.id);if(!prop){prop=sprite(key,p.x,p.y+5,.5,.9);prop.scale.set(building.kind==='shelter'?.65:.85);depth.addChild(prop);constructions.set(building.id,prop);}
+   prop.texture=sheet.textures[key];prop.position.set(p.x,p.y+5);prop.zIndex=p.y-4;
+  }
+  for(const site of w.landscape.sites){
+   let prop=landmarks.get(site.id);const p=toIso(site.position),key=site.kind==='spring'?'spring':site.kind==='flint'?'rock0':site.kind==='seeds'?'crop2':'shrub1';
+   if(!prop){prop=sprite(key,p.x,p.y,.5,.85);prop.scale.set(.6);depth.addChild(prop);landmarks.set(site.id,prop);}
+   prop.position.set(p.x,p.y);prop.zIndex=p.y;prop.alpha=site.discoverers.includes(state.player.humanId??'')?1:.65;
+  }
+
   const living=new Set(state.world.humans.filter(h=>h.alive).map(h=>h.id));
   for(const [id,a] of actors)if(!living.has(id))a.dying=true;
   for(const [i,h] of state.world.humans.filter(h=>h.alive).entries()){
@@ -68,13 +82,14 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
    a.marker.clear();
    if(h.id===selected)a.marker.ellipse(0,0,12,6).stroke({color:0xe9cd8a,width:1.5,alpha:.9});
    if(h.id===state.player.humanId)a.marker.poly([-3,-50,0,-54,3,-50,0,-47]).fill(0xaddde0);
-   a.label.visible=h.id===selected||h.id===state.player.humanId;a.label.text=h.name+(h.id===state.player.humanId?' · 나':'');
+   a.label.visible=h.id===selected||h.id===state.player.humanId;a.label.text=h.name+(h.id===state.player.humanId?' · 나':'')+(h.work?'\n'+ACTION_LABELS[h.work.kind]+' '+(h.work.total-h.work.remaining)+'/'+h.work.total:'');
   }
   route.clear();const h=state.world.humans.find(h=>h.id===selected&&h.alive);
   if(h)for(const tile of h.path){const p=toIso(tile);route.ellipse(p.x,p.y,2.5,1.3).fill({color:0xe5cd92,alpha:.55});}
  }
  let cameraInitialized=false;
  function center(){const h=state.world.humans.find(h=>h.id===selected&&h.alive);const p=h?actors.get(h.id)?.motion.position??toIso(h.position):toIso({x:23,y:23});const scale=host.clientWidth<500?1.05:1.3;scene.scale.set(scale);scene.position.set(host.clientWidth/2-p.x*scale,host.clientHeight/2-p.y*scale);cameraInitialized=true;}
+ const rain=new Graphics();atmosphere.addChild(rain);
  const cloud=new Graphics();for(let i=0;i<7;i++)cloud.ellipse(i*155-400,(i%3)*95-130,170,65).fill({color:0x102922,alpha:.025});atmosphere.addChild(cloud);atmosphere.eventMode='none';
  function tick(){
   const dt=Math.min(app.ticker.deltaMS/1000,.1),running=!playback.paused;
@@ -84,7 +99,11 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
   const season=seasonPhase;
   const palettes=[0xf1f4df,0xffffff,0xd8b77b,0xc5d4cd],phase=season*4,from=palettes[Math.floor(phase)%4],to=palettes[(Math.floor(phase)+1)%4],mix=phase%1;
   const seasonal=[16,8,0].reduce((color,shift)=>color|(Math.round(((from>>shift)&255)*(1-mix)+((to>>shift)&255)*mix)<<shift),0);
-  ground.tint=seasonal;
+  const weather=state.world.landscape.weather;
+  ground.tint=weather==='drought'?0xd5b37c:weather==='bounty'?0xd1edb3:weather==='flood'?0xb4c7d2:seasonal;
+  rain.clear();
+  if(weather==='flood')for(let n=0;n<90;n++){const x=((n*137+elapsed*80)%2400)-1200,y=((n*89+elapsed*230)%1600);rain.moveTo(x,y).lineTo(x-4,y+15).stroke({color:0xc2d7df,width:1,alpha:.4});}
+
   for(let i=0;i<trees.length;i++){const tree=trees[i];tree.tint=seasonal;const base=treeBase.get(tree)!;tree.skew.x=Math.sin(elapsed*.75+i*1.9)*.014;tree.scale.y=base*(1+Math.sin(elapsed+i)*.003);}
   for(let i=0;i<ripples.length;i++){ripples[i].alpha=.12+Math.sin(elapsed*1.7+i*.6)*.1;}
   for(let i=0;i<fires.length;i++){fires[i].visible=state.world.technologies.fire.adopted;fires[i].texture=sheet.textures[`fire${Math.floor(elapsed*9+i)%6}`];}
@@ -96,7 +115,7 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
    const h=state.world.humans.find(h=>h.id===id)!;const before={...a.motion.position};const pos=a.motion.advance(dt,playback.paused);const dx=pos.x-before.x,dy=pos.y-before.y;
    const moving=a.motion.moving||Math.abs(dx)+Math.abs(dy)>.001;
    if(Math.abs(dx)+Math.abs(dy)>.001){a.facing=dy<0?'back':'front';if(Math.abs(dx)>.01)a.flip=dx<0?-1:1;}
-   const action=moving?'walk':h.action==='rest'?'rest':h.action==='gather'?'work':h.action==='socialize'?'talk':'idle';
+   const action=moving?'walk':h.work?(h.work.kind==='explore'?'survey':h.work.kind):h.action==='explore'?'survey':['fish','build','tend'].includes(h.action)?h.action:h.action==='rest'?'rest':h.action==='gather'?'work':h.action==='socialize'?'talk':'idle';
    const frame=Math.floor((elapsed*(moving?9:action==='work'?7:3)+a.phase))%6;
    a.axe.visible=h.knowledge.includes('stone')&&(h.action==='gather'||moving);a.axe.x=a.flip*11;a.axe.rotation=Math.sin(elapsed*7+a.phase)*(h.action==='gather'?.3:.1);
    a.basket.visible=h.knowledge.includes('storage')&&h.food>0;

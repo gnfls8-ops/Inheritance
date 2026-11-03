@@ -7,7 +7,7 @@ export function populationDay(s:SimulationSnapshot){
  for(const h of w.humans){
   if(!h.alive)continue;h.ageDays++;
   if(h.health<=0||h.ageDays>=80*365){
-   h.alive=false;h.deathDay=day;h.deathCause=h.ageDays>=80*365?'노령':h.hunger>=85?'굶주림':'건강 악화';h.path=[];h.techOrder=null;h.control='auto';h.action='idle';t.deaths++;
+   h.alive=false;h.deathDay=day;h.deathCause=h.ageDays>=80*365?'노령':h.hunger>=85?'굶주림':'건강 악화';h.path=[];h.work=null;h.techOrder=null;h.control='auto';h.action='idle';t.deaths++;
    remember(w,h,{day,kind:'death',text:`${h.name} 사망 · 향년 ${Math.floor(h.ageDays/365)}세 · ${h.deathCause}`});
 
   }
@@ -22,7 +22,7 @@ export function populationDay(s:SimulationSnapshot){
  const enough=w.resources.reduce((a,b)=>a+b,0)>=living.length;
  if(adults.length>=2&&living.length<30&&enough&&dayChance(s.seed,w.day,88)<adults.length/180){
   const id=`human-${t.nextHuman++}`,source=adults[0];
-  const child={...structuredClone(source),id,name:`후대 ${t.nextHuman-1}`,ageDays:0,health:100,hunger:0,fatigue:0,loneliness:20,food:1,alive:true,deathDay:null,deathCause:null,knowledge:[],learnedAt:{},relationships:{},path:[],visited:[],techOrder:null,command:null,socialCooldown:{},targetHumanId:null,control:'auto' as const,action:'idle' as const,reason:'새로운 생명',traits:{curiosity:Math.floor(dayChance(s.seed,w.day,101)*101),stability:Math.floor(dayChance(s.seed,w.day,102)*101),sociability:Math.floor(dayChance(s.seed,w.day,103)*101),riskTaking:Math.floor(dayChance(s.seed,w.day,104)*101)}};
+  const child={...structuredClone(source),id,name:`후대 ${t.nextHuman-1}`,ageDays:0,health:100,hunger:0,fatigue:0,loneliness:20,food:1,alive:true,deathDay:null,deathCause:null,knowledge:[],learnedAt:{},relationships:{},path:[],visited:[],techOrder:null,work:null,command:null,socialCooldown:{},targetHumanId:null,control:'auto' as const,action:'idle' as const,reason:'새로운 생명',traits:{curiosity:Math.floor(dayChance(s.seed,w.day,101)*101),stability:Math.floor(dayChance(s.seed,w.day,102)*101),sociability:Math.floor(dayChance(s.seed,w.day,103)*101),riskTaking:Math.floor(dayChance(s.seed,w.day,104)*101)}};
   w.humans.push(child);w.region.humanIds.push(id);w.legacy.people[id]={name:child.name,entries:[{day,kind:'world',text:`${child.name} 출생`}]};t.births++;
  }
  const keep=new Set(w.humans.filter(h=>!h.alive).slice(-30).map(h=>h.id));

@@ -18,23 +18,31 @@ export function validateSnapshot(s:SimulationSnapshot):void {
   if(!person||typeof person.name!=='string'||!Array.isArray(person.entries))fail();
   for(const e of person.entries)if(!e||!number(e.day,0,s.world.day)||typeof e.text!=='string')fail();
  }
- for(const e of legacy.transmissions)if(!e||!['fire','stone','storage'].includes(e.technology)||!number(e.day,0,s.world.day)||typeof e.fromName!=='string'||typeof e.toName!=='string')fail();
+ for(const e of legacy.transmissions)if(!e||!['fire','stone','storage','cultivation'].includes(e.technology)||!number(e.day,0,s.world.day)||typeof e.fromName!=='string'||typeof e.toName!=='string')fail();
+ const l=s.world.landscape;
+ if(!l||!Array.isArray(l.sites)||!Array.isArray(l.structures)||!Array.isArray(l.chapters)||!number(l.harvests)||!['foraging','settlement','cultivation'].includes(l.chapter)||!['clear','bounty','drought','flood'].includes(l.weather))fail();
+ const point=(v:{x:number;y:number})=>v&&Number.isInteger(v.x)&&number(v.x,0,47)&&Number.isInteger(v.y)&&number(v.y,0,47);
+ for(const site of l.sites)if(!site||!point(site.position)||!Array.isArray(site.discoverers)||!['berries','spring','flint','seeds'].includes(site.kind)||typeof site.name!=='string')fail();
+ for(const b of l.structures)if(!b||!point(b.position)||!['shelter','plot'].includes(b.kind)||!number(b.progress,0,3)||!number(b.harvests)||typeof b.ownerName!=='string'||(b.plantedDay!==null&&!number(b.plantedDay,0,s.world.day)))fail();
+ if(l.forecast&&(!['bounty','drought','flood'].includes(l.forecast.kind)||!number(l.forecast.starts)||!number(l.forecast.ends,l.forecast.starts)))fail();
+ for(const c of l.chapters)if(!['foraging','settlement','cultivation'].includes(c.stage)||!number(c.day,0,s.world.day))fail();
  const ids=new Set<string>();
  for(const h of s.world.humans){
   if(!h||typeof h.id!=='string'||ids.has(h.id)||typeof h.name!=='string'||typeof h.alive!=='boolean'||!number(h.ageDays)||!number(h.food)||!h.position)fail();ids.add(h.id);
   if(!Number.isInteger(h.position.x)||!number(h.position.x,0,47)||!Number.isInteger(h.position.y)||!number(h.position.y,0,47))fail();
   if([h.health,h.hunger,h.fatigue,h.loneliness,...Object.values(h.traits??{})].some(v=>!number(v,0,100))||!h.traits||Object.keys(h.traits).length!==4)fail();
   if(!Array.isArray(h.path)||h.path.some(v=>!v||!Number.isInteger(v.x)||!number(v.x,0,47)||!Number.isInteger(v.y)||!number(v.y,0,47)))fail();
-  if(!Array.isArray(h.knowledge)||h.knowledge.some(v=>!['fire','stone','storage'].includes(v))||!Array.isArray(h.visited)||!object(h.relationships)||!object(h.learnedAt))fail();
-  if(!['auto','player'].includes(h.control)||!['idle','move','gather','explore','rest','socialize'].includes(h.action))fail();
+  if(!Array.isArray(h.knowledge)||h.knowledge.some(v=>!['fire','stone','storage','cultivation'].includes(v))||!Array.isArray(h.visited)||!object(h.relationships)||!object(h.learnedAt))fail();
+  if(!['auto','player'].includes(h.control)||!['idle','move','gather','explore','rest','socialize','fish','build','tend'].includes(h.action))fail();
   if(!object(h.socialCooldown)||Object.values(h.socialCooldown).some(v=>!number(v))||(h.deathCause!==null&&typeof h.deathCause!=='string'))fail();
   if(h.command&&(!['queued','progress','completed','failed','cancelled'].includes(h.command.status)||typeof h.command.text!=='string'||!number(h.command.day,0,s.world.day)))fail();
-  if(h.techOrder&&(!['experiment','teach'].includes(h.techOrder.kind)||!['fire','stone','storage'].includes(h.techOrder.id)))fail();
+  if(h.work&&(!['explore','fish','build','tend'].includes(h.work.kind)||!number(h.work.remaining,1,3)||!number(h.work.total,1,3)))fail();
+  if(h.techOrder&&(!['experiment','teach'].includes(h.techOrder.kind)||!['fire','stone','storage','cultivation'].includes(h.techOrder.id)))fail();
   for(const r of Object.values(h.relationships))if(!r||!number(r.trust,0,100)||!number(r.familiarity,0,100))fail();
  }
  if(p.phase==='playing'&&!s.world.humans.some(h=>h.id===p.humanId&&h.alive))fail();
  if(['summary','successor'].includes(p.phase)&&(!p.summary||!number(p.summary.diedDay)||!Array.isArray(p.summary.knowledge)))fail();
  if(['summary','successor'].includes(p.phase)&&s.world.humans.some(h=>h.id===p.humanId&&h.alive))fail();
  if(t.mode==='history'&&p.phase!=='successor')fail();
- for(const id of ['fire','stone','storage'] as const){const k=s.world.technologies?.[id];if(!k||!number(k.holders)||typeof k.adopted!=='boolean'||typeof k.everDiscovered!=='boolean')fail();}
+ for(const id of ['fire','stone','storage','cultivation'] as const){const k=s.world.technologies?.[id];if(!k||!number(k.holders)||typeof k.adopted!=='boolean'||typeof k.everDiscovered!=='boolean')fail();}
 }

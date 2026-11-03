@@ -11,7 +11,7 @@ it('restores a living retired v2 character without changing the world or choosin
  old.timeline.mode='history';delete old.world.legacy;delete old.timeline.requestUntil;
  for(const h of old.world.humans){delete h.command;delete h.socialCooldown;delete h.deathCause;}
  const before=structuredClone(old),r=Simulation.restore(old).snapshot();
- expect(r.version).toBe(3);expect(r.player).toMatchObject({humanId:'human-1',phase:'playing',summary:null});expect(r.timeline.mode).toBe('daily');
+ expect(r.version).toBe(4);expect(r.player).toMatchObject({humanId:'human-1',phase:'playing',summary:null});expect(r.timeline.mode).toBe('daily');
  expect(r.world.day).toBe(123);expect(r.world.resources).toEqual(before.world.resources);
  expect(r.world.humans.map(h=>h.position)).toEqual(before.world.humans.map((h:any)=>h.position));expect(old).toEqual(before);
 });

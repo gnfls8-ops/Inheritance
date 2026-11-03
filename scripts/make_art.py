@@ -83,11 +83,11 @@ for frame in range(6):
 for palette in range(3):
  cloth=[(157,133,91),(117,132,112),(165,155,129)][palette]
  for facing in ['front','back']:
-  for action in ['idle','walk','work','rest','talk']:
+  for action in ['idle','walk','work','rest','talk','survey','fish','build','tend']:
    for f in range(6):
     im,d=new(32,56);phase=math.sin(f/6*math.tau);stride=round(phase*4) if action=='walk' else 0
     bob=round(abs(phase)) if action=='walk' else (1 if f==2 else 0)
-    squat=12 if action=='rest' else 0;lean=3 if action=='work' and f<3 else 0
+    squat=12 if action in ['rest','survey','tend'] else 0;lean=3 if action in ['work','build','survey','tend'] and f<3 else 0
     hip=35+squat//2;head=8+bob+squat
     d.ellipse((7,48,26,54),fill=(13,22,17,70))
     # Seven-head adult figure, independent arms and legs, hide clothing and leather wraps.
@@ -100,7 +100,7 @@ for palette in range(3):
     d.line((19+lean,head+12,21,hip+2),fill=shade(cloth,-28),width=2)
     d.line((11,hip-6,21,hip-5),fill='#65563c',width=2)
     arm=-stride//2
-    if action=='work':
+    if action in ['work','build','survey','tend']:
      d.line((20+lean,head+13,24,head+21,26,head+15+round(phase*4)),fill='#bc9670',width=2)
 
     elif action=='talk':d.line((20,head+13,24,head+18,27,head+14+round(phase*2)),fill='#bf9c76',width=2)
@@ -111,6 +111,12 @@ for palette in range(3):
     d.polygon([(13+lean,head+5),(12+lean,head+1),(15+lean,head-1),(19+lean,head),(20+lean,head+4)],fill='#484033')
     if facing=='back':d.rectangle((13+lean,head+3,19+lean,head+7),fill='#504436')
     else:d.point((18+lean,head+4),fill='#4d4639');d.point((19+lean,head+6),fill='#e1bd92')
+    if action=='fish':
+     d.line((21,head+23,29,head+9+round(phase*2)),fill='#bba06f',width=1)
+     d.line((29,head+9+round(phase*2),31,48),fill='#c5d2ae')
+    if action=='build':d.line((26,head+20,27,head+13+round(phase*3)),fill='#7f6244',width=3)
+    if action=='tend':d.line((23,head+23,28,50),fill='#9d8157',width=2)
+    if action=='survey':d.ellipse((23,48,28,51),outline='#d5c7a0')
     art[f'human{palette}-{facing}-{action}{f}']=im
 im,d=new(24,25)
 d.ellipse((2,15,22,24),fill=(18,29,15,60));d.polygon([(4,8),(19,8),(21,20),(6,22)],fill='#9d8350')
@@ -118,6 +124,24 @@ for y in range(10,22,3):d.line((5,y,20,y-1),fill='#c2aa70')
 for x in range(7,21,3):d.line((x,8,x+1,21),fill='#705b39')
 d.arc((5,0,18,15),180,360,fill='#bc9c66',width=2);art['basket']=im
 im,d=new(16,25);d.line((5,24,10,6),fill='#a0875a',width=2);d.polygon([(5,5),(8,0),(15,2),(12,9)],fill='#8a9589');d.line((8,1,14,2),fill='#d0cec0');art['axe']=im
+for stage in range(3):
+ im,d=new(64,38);d.polygon([(3,19),(32,5),(61,19),(32,34)],fill='#665038')
+ for row in range(4):
+  for col in range(4):
+   x=17+col*8-row*3;y=12+row*4+col*2
+   d.line((x-3,y,x+3,y-2),fill='#463e2e')
+   if stage:
+    height=5 if stage==1 else 11
+    d.line((x,y,x,y-height),fill='#719248' if stage==1 else '#c1ac60',width=1)
+    d.line((x,y-2,x-3,y-5),fill='#8fa65c')
+    if stage==2:d.ellipse((x-1,y-height-2,x+2,y-height+3),fill='#d8bf72')
+ art[f'crop{stage}']=im
+im,d=new(100,92)
+d.ellipse((5,66,94,88),fill=(15,25,15,50))
+for a,b in [((15,75),(45,18)),((45,18),(82,77)),((45,18),(87,48)),((15,75),(82,77))]:
+ d.line((*a,*b),fill='#a38b61',width=3)
+art['scaffold']=im
+im,d=new(52,40);d.ellipse((3,16,48,35),fill='#4d827c');d.ellipse((12,20,38,30),outline='#a4c7af',width=2);art['spring']=im
 # Tight shelf atlas with two-pixel gutters, shipped prebuilt; no runtime Python dependency.
 positions={};x=y=row=0
 for name,im in sorted(art.items(),key=lambda item:-item[1].height):

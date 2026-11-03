@@ -4,3 +4,10 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 .meet-invitation{position:absolute;right:16px;bottom:36px;max-width:calc(100% - 32px);z-index:2;background:#3c4b31;border-color:#a6a071}
 @media(max-width:900px){.meet-invitation{bottom:116px;left:12px;right:auto;font-size:11px}}
+
+.world-guide{display:block;margin-top:10px;background:#243b2cdd;padding:7px 12px;min-height:36px;font-size:11px}
+.journey-card{padding:14px;background:#30402e;border-left:2px solid #b4a46b;margin:12px 0;border-radius:4px}
+.activity-hint{grid-column:1/-1;font-size:11px;line-height:1.8;color:#c4c8b0}
+@media(max-width:900px){.world-guide{font-size:10px;min-height:32px;margin-top:5px}.map-tools{top:112px}}
+@media(max-height:540px) and (orientation:landscape){.map-tools{top:12px}}
+.world-guide{pointer-events:auto}
