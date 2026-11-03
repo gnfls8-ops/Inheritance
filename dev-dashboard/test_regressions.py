@@ -1,5 +1,5 @@
 """Isolated regressions: never reads/writes the private production request ledger."""
-import argparse, importlib.util, json, re, shutil, subprocess, sys, tempfile, unittest
+import argparse, importlib.util, json, os, re, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 BASE=Path(__file__).resolve().parent
@@ -50,6 +50,22 @@ class CollectorRegression(unittest.TestCase):
  def test_collection_without_checks_is_not_reported_as_a_failure(self):
   self.module.collect(self.args)
   self.assertEqual(self.module.requests()[0]['status'],'collected_unverified')
+ def run_failed_cli(self, dashboard=False):
+  root=self.module.ROOT
+  shutil.copyfile(BASE/'collect.py',self.module.BASE/'collect.py')
+  fakebin=root/'bin';fakebin.mkdir()
+  for name,body in [('git',"#!/bin/sh\ncase \"$1\" in status) exit 0;; *) echo fixture-commit;; esac\n"),('npm','#!/bin/sh\necho deliberate-build-failure\nexit 7\n'),('python','#!/bin/sh\necho deliberate-dashboard-failure\nexit 8\n')]:
+   file=fakebin/name;file.write_text(body);file.chmod(0o755)
+  result=subprocess.run([sys.executable,str(self.module.BASE/'collect.py'),'collect','--plan',str(self.plan),'--dashboard' if dashboard else '--checks'],cwd=root,env={**os.environ,'PATH':str(fakebin)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
+  snapshot=self.module.read(self.module.DATA/'rounds/fixture-round/round.json')
+  self.assertEqual(snapshot['status'],'failed')
+  self.assertEqual(self.module.requests()[0]['status'],'needs_fix')
+  self.module.verify(None)
+  self.assertNotEqual(result.returncode,0,'Failed checks must stop a caller using shell success/&&; snapshot must remain preserved')
+ def test_failed_build_cli_returns_failure_with_snapshot_preserved(self):
+  self.run_failed_cli()
+ def test_failed_dashboard_cli_returns_failure_with_snapshot_preserved(self):
+  self.run_failed_cli(dashboard=True)
  def test_duplicate_round_still_rejected(self):
   self.module.collect(self.args);before=(self.module.DATA/'rounds/fixture-round/hashes.json').read_bytes()
   with self.assertRaisesRegex(ValueError,'불변 회차'):self.module.collect(self.args)

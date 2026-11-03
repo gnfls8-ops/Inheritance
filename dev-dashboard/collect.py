@@ -119,6 +119,7 @@ def collect(args):
    pending=[dict(item,carried_from=round_id) for item in plan.get('improvements',[]) if item.get('approval')=='approved']
    write(PRIVATE/'next-plan.json',{'from_round':round_id,'generated_at':now(),'approval':'approved' if pending else 'needs_confirmation','planning':pending,'note':'승인된 항목만 다음 기획에 승계합니다. 게임 소스 수정은 이 채팅에서 수행하며 수집기는 코드를 변경하지 않습니다.'})
   catalog();print('회차 보존:',round_id,record['status'],flush=True)
+  return record['status']
  except:
   if stage.exists():shutil.rmtree(stage)
   raise
@@ -150,5 +151,7 @@ if __name__=='__main__':
  check=sub.add_parser('verify');check.set_defaults(run=verify)
  cat=sub.add_parser('catalog');cat.set_defaults(run=lambda args:catalog())
  args=parser.parse_args()
- try:args.run(args)
+ try:
+  result=args.run(args)
+  if args.action=='collect' and result=='failed':parser.exit(1,'검사 실패: 회차 증거는 보존했습니다. 다음 성공 단계로 진행하지 마세요.\n')
  except (ValueError,KeyError,OSError,subprocess.SubprocessError) as error:parser.exit(1,str(error)+'\n')
