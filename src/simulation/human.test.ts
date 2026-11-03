@@ -77,7 +77,7 @@ describe('player intervention and multi-day simulation',()=>{
         if(day%23===0)sim.act('human-1','rest');
         if(day%31===0)sim.act('human-1','explore');
         if(day%47===0)sim.resumeAuto('human-1');
-        sim.step();
+        sim.acknowledgeEvent();sim.step();
       }
     }
     expect(a.snapshot()).toEqual(b.snapshot());

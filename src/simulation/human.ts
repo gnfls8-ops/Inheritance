@@ -1,3 +1,4 @@
+import {learn,TECHNOLOGIES} from './technology';
 import type { Activity, HumanState, WorldState } from './model';
 import type { Point } from './map';
 import { findPath, walkable } from './map';
@@ -80,6 +81,8 @@ export function stepHuman(world:WorldState,h:HumanState,random:SeededRandom) {
     if(other&&distance(h.position,other.position)<=1){
       for(const [a,b] of [[h,other],[other,h]]){const rel=a.relationships[b.id]??{familiarity:0,trust:0};a.relationships[b.id]={familiarity:clamp(rel.familiarity+8),trust:clamp(rel.trust+5)};a.loneliness=clamp(a.loneliness-30);}
       record(world,h,`${other.name}와 교류하며 신뢰를 쌓음`);
+      const tech=TECHNOLOGIES.find(t=>h.knowledge.includes(t.id)&&!other.knowledge.includes(t.id));
+      if(tech&&random.next()<Math.max(.05,Math.min(.9,.2+other.traits.curiosity/500+(other.relationships[h.id]?.trust??0)/500-other.traits.stability/1000))){learn(world,other,tech.id);world.technologyLog.push({day:world.day+1,text:`${h.name} → ${other.name}: 교류 중 ${tech.name} 전승`});world.technologyLog=world.technologyLog.slice(-200);}
     }
   }
   if(h.action==='move')record(world,h,'지정한 목적지에 도착');

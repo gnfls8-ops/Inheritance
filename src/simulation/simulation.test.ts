@@ -26,10 +26,10 @@ describe('seeded random', () => {
 describe('daily simulation', () => {
   it('replays identical daily commands and stores zero-based tick numbers', () => {
     const a = started(42), b = started(42);
-    for (let i=0; i<365; i++) { a.step(); b.step(); }
+    for (let i=0; i<365; i++) { a.acknowledgeEvent(); b.acknowledgeEvent(); a.step(); b.step(); }
     expect(a.snapshot()).toEqual(b.snapshot());
     expect(a.snapshot().world.day).toBe(365);
-    expect(a.snapshot().commands[365]).toEqual({tick:364,type:'wait'});
+    expect(a.snapshot().commands.filter(c=>c.type==='wait')[364]).toEqual({tick:364,type:'wait'});
     expect(a.snapshot().randomState).not.toBe(started(42).snapshot().randomState);
   });
   it('isolates snapshots from external mutation', () => {

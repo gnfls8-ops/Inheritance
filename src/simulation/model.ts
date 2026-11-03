@@ -1,3 +1,4 @@
+import type {Timeline,TimeMode} from './time';
 import type { TechOrder, TechStatus, TechRecord, TechnologyId } from './technology';
 import type { Point, TileMap } from './map';
 export type Speed = 1 | 2 | 4;
@@ -18,12 +19,13 @@ export interface WorldState {
   era: 'prehistory'; day: number; map: TileMap; region: RegionState; humans: HumanState[];
   technologies: Record<TechnologyId,TechStatus>; technologyLog: TechRecord[]; resources: number[]; activityLog: ActivityRecord[];
 }
-export type Command = {tick:number;type:'choose'|'review'|'request';humanId:string}
+export type Command = {tick:number;type:'mode';mode:TimeMode}|{tick:number;type:'retire'|'event';humanId:string}
+  | {tick:number;type:'choose'|'review'|'request';humanId:string}
   | { tick: number; type: 'wait' }
   | { tick: number; type: 'move'; humanId: string; target: Point }
   | { tick: number; type: 'action'; humanId: string; action: Activity }
   | {tick:number;type:'technology';humanId:string;order:TechOrder}
   | { tick: number; type: 'auto'; humanId: string };
-export interface LifeSummary {humanId:string;name:string;startedDay:number;diedDay:number;knowledge:string[];relationships:Record<string,Relationship>}
+export interface LifeSummary {humanId:string;name:string;startedDay:number;diedDay:number;retired?:boolean;knowledge:string[];relationships:Record<string,Relationship>}
 export interface PlayerState {humanId:string|null;phase:'choose'|'playing'|'summary'|'successor';startedDay:number;summary:LifeSummary|null}
-export interface SimulationSnapshot { player:PlayerState; version: 1; seed: number; randomState: number; world: WorldState; commands: Command[] }
+export interface SimulationSnapshot { timeline:Timeline; player:PlayerState; version: 2; seed: number; randomState: number; world: WorldState; commands: Command[] }
