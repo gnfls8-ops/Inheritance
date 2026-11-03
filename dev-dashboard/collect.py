@@ -20,7 +20,7 @@ def source(value):
  path=(ROOT/value).resolve()
  if not path.is_relative_to(ROOT) or not path.is_file():raise ValueError('저장소 밖 또는 없는 증거: '+value)
  relative=path.relative_to(ROOT)
- allowed=(str(relative) in ['README.md','dev-dashboard/README.md'] or relative.parts[0]=='docs') and path.suffix in ['.md','.json']
+ allowed=(str(relative) in ['README.md','dev-dashboard/README.md'] or relative.parts[0]=='docs' or relative.parts[:3]==('dev-dashboard','private','evidence')) and path.suffix in ['.md','.json']
  allowed=allowed or (relative.parts[0]=='release' and path.suffix=='.png')
  if not allowed:raise ValueError('증거 허용 목록 밖: '+value)
  return path

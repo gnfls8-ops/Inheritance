@@ -9,7 +9,7 @@ const tabs={overview:'회차 개요',checks:'검증 근거',documents:'문서 �
 function pill(value){return node('span',labels[value]||value,'pill '+(['verified','passed'].includes(value)?'good':'warn'));}
 function list(items,empty='기록된 항목이 없습니다.'){
  if(!items?.length)return node('p',empty,'empty');
- const ul=node('ul');for(const item of items)ul.append(node('li',typeof item==='string'?item:item.text||JSON.stringify(item)));return ul;
+ const ul=node('ul');for(const item of items)ul.append(node('li',typeof item==='string'?item:(item.text||JSON.stringify(item))+(item.carried_from?' · 승계: '+item.carried_from:'')));return ul;
 }
 function card(title,content){const e=node('article',undefined,'card');e.append(node('h3',title),content);return e;}
 function link(text,url){const a=node('a',text);a.href=url;a.target='_blank';a.rel='noopener';if(url.startsWith('data:'))a.download='evidence.txt';return a;}
