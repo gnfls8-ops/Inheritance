@@ -54,6 +54,10 @@ def command(argv,stage,name,timeout=240):
  log=stage/'logs'/f'{name}.txt';log.parent.mkdir(exist_ok=True);log.write_text(output,encoding='utf-8')
  return {'name':name,'status':'passed' if code==0 else 'failed','exit_code':code,'started_at':started,'ended_at':now(),'log':f'logs/{name}.txt'}
 def collect(args):
+ if args.archive and (args.checks or args.browser or args.dashboard):
+  raise ValueError('--archive는 --checks/--browser/--dashboard와 함께 사용할 수 없습니다. 과거 자료와 새 검증을 구분하세요.')
+ if args.browser and not args.checks:
+  raise ValueError('--browser를 실행하려면 --checks도 지정하세요. 요청한 검사를 조용히 생략하지 않습니다.')
  plan=read(Path(args.plan))
  if not plan:raise ValueError('기획 JSON이 필요합니다.')
  round_id=ident(plan['id']);archive=bool(args.archive)
@@ -78,6 +82,7 @@ def collect(args):
     if args.browser not in ['scripts/check_living_world.py','scripts/check_browser.py','scripts/check_release.py']:raise ValueError('허용되지 않은 브라우저 검사')
     checks.append(command(['python',args.browser],stage,'browser'))
   if not archive and args.dashboard:
+   checks.append(command(['python','dev-dashboard/test_regressions.py'],stage,'dashboard-regressions'))
    checks.append(command(['python','dev-dashboard/check_dashboard.py'],stage,'dashboard'))
   release=read(ROOT/'public/release.json',{})
   record={'schema':1,'id':round_id,'title':plan['title'],'kind':'archive' if archive else 'iteration','started_at':started,'finished_at':now(),
@@ -110,7 +115,7 @@ def collect(args):
    path.chmod(0o555 if path.is_dir() else 0o444)
   destination.chmod(0o555)
   if not archive:
-   for request_id in plan.get('requests',[]):update_request(request_id,'verified' if record['status']=='verified' else 'needs_fix',round_id)
+   for request_id in plan.get('requests',[]):update_request(request_id,record['status'] if record['status'] in ['verified','collected_unverified'] else 'needs_fix',round_id)
    pending=[dict(item,carried_from=round_id) for item in plan.get('improvements',[]) if item.get('approval')=='approved']
    write(PRIVATE/'next-plan.json',{'from_round':round_id,'generated_at':now(),'approval':'approved' if pending else 'needs_confirmation','planning':pending,'note':'승인된 항목만 다음 기획에 승계합니다. 게임 소스 수정은 이 채팅에서 수행하며 수집기는 코드를 변경하지 않습니다.'})
   catalog();print('회차 보존:',round_id,record['status'],flush=True)
