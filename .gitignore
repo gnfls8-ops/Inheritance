@@ -5,3 +5,8 @@ coverage/
 
 release/
 INHERITANCE-STEP4.zip
+
+# Private development evidence: never bundled into or published with the game.
+dev-dashboard/private/
+dev-dashboard/site/data/
+dev-dashboard/__pycache__/
