@@ -67,7 +67,7 @@ it('chapters require constructed places, living knowledge and actual harvests, n
 });
 it('migrates v3 saves without changing the person, date, resources or RNG',()=>{
  const s=setup(),old:any=s.snapshot();old.version=3;delete old.world.landscape;delete old.world.technologies.cultivation;for(const h of old.world.humans)delete h.work;
- const restored=Simulation.restore(old).snapshot();expect(restored.version).toBe(4);expect(restored.world.resources).toEqual(old.world.resources);expect(restored.player).toEqual(old.player);expect(restored.randomState).toBe(old.randomState);
+ const restored=Simulation.restore(old).snapshot();expect(restored.version).toBe(5);expect(restored.world.resources).toEqual(old.world.resources);expect(restored.player).toEqual(old.player);expect(restored.randomState).toBe(old.randomState);
 });
 it('mid-survey restoration reproduces nature, activities and discoveries',()=>{
  const a=setup();a.act('human-1','explore');a.step();const b=Simulation.restore(a.snapshot());

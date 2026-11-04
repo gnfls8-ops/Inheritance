@@ -15,7 +15,7 @@ with sync_playwright() as p:
   panel('설정')
   with page.expect_download() as d:page.get_by_role('button',name='저장 파일 내려받기').click()
   return json.load(open(d.value.path()))
- base=download();assert base['version']==4
+ base=download();assert base['version']==5
  def load(s):
   panel('설정');page.locator('input[type=file]').set_input_files({'name':'world.json','mimeType':'application/json','buffer':json.dumps(s).encode()});page.wait_for_timeout(250)
  def run(days):
@@ -56,7 +56,7 @@ with sync_playwright() as p:
  page.screenshot(path=str(out/'flood.png'));assert download()['world']['landscape']['structures'][1]['plantedDay'] is None
  old=copy.deepcopy(base);old['version']=3;del old['world']['landscape'];del old['world']['technologies']['cultivation']
  for h in old['world']['humans']:del h['work']
- load(old);assert download()['version']==4;assert '아라' in page.locator('.identity').inner_text()
+ load(old);assert download()['version']==5;assert '아라' in page.locator('.identity').inner_text()
  page.set_viewport_size({'width':390,'height':844});panel('여정')
  assert page.get_by_role('dialog',name='삶과 세계의 변화',exact=True).is_visible()
  assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

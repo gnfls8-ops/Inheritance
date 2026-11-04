@@ -1,3 +1,4 @@
+import {lifeStage,STAGES} from '../simulation/life';
 import {ACTION_LABELS} from '../simulation/human';
 import {readyCrop} from '../simulation/landscape';
 import { Application, Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
@@ -32,7 +33,8 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
   for(let sum=0;sum<map.width+map.height-1;sum++)for(let x=0;x<map.width;x++){
    const y=sum-x;if(y<0||y>=map.height)continue;
    const type=map.tiles[y*48+x],p=toIso({x,y}),variation=(x*13+y*7)%4;
-   const tile=sprite(`${type==='river'?'water':type==='rock'?'rockfloor':type}${variation}`,p.x,p.y,.5,.5);tile.width=66;tile.height=33;ground.addChild(tile);
+   const tile=sprite(`${type==='river'?'water':type==='rock'?'rockfloor':type==='sand'?'rockfloor':type}${variation}`,p.x,p.y,.5,.5);tile.width=66;tile.height=33;if(type==='sand')tile.tint=0xe3bb76;ground.addChild(tile);
+   if(type==='sand'&&(x+y)%3===0){const dune=new Graphics().moveTo(-15,1).quadraticCurveTo(0,-5,15,1).stroke({color:0xf1cc83,width:2,alpha:.7});dune.position.set(p.x,p.y);ground.addChild(dune);}
    if(type==='river'){
     const shimmer=sprite(`water${(variation+1)%4}`,p.x,p.y,.5,.5);shimmer.alpha=.15;water.addChild(shimmer);ripples.push(shimmer);
     // Shallow banks follow the actual navigable tile boundary.
@@ -63,7 +65,7 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
   for(const site of w.landscape.sites){
    let prop=landmarks.get(site.id);const p=toIso(site.position),key=site.kind==='spring'?'spring':site.kind==='flint'?'rock0':site.kind==='seeds'?'crop2':'shrub1';
    if(!prop){prop=sprite(key,p.x,p.y,.5,.85);prop.scale.set(.6);depth.addChild(prop);landmarks.set(site.id,prop);}
-   prop.position.set(p.x,p.y);prop.zIndex=p.y;prop.alpha=site.discoverers.includes(state.player.humanId??'')?1:.65;
+   prop.texture=sheet.textures[key];prop.position.set(p.x,p.y);prop.zIndex=p.y;prop.alpha=site.discoverers.includes(state.player.humanId??'')?1:.65;
   }
 
   const living=new Set(state.world.humans.filter(h=>h.alive).map(h=>h.id));
@@ -82,7 +84,7 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
    a.marker.clear();
    if(h.id===selected)a.marker.ellipse(0,0,12,6).stroke({color:0xe9cd8a,width:1.5,alpha:.9});
    if(h.id===state.player.humanId)a.marker.poly([-3,-50,0,-54,3,-50,0,-47]).fill(0xaddde0);
-   a.label.visible=h.id===selected||h.id===state.player.humanId;a.label.text=h.name+(h.id===state.player.humanId?' · 나':'')+(h.work?'\n'+ACTION_LABELS[h.work.kind]+' '+(h.work.total-h.work.remaining)+'/'+h.work.total:'');
+   a.label.visible=h.id===selected||h.id===state.player.humanId;a.label.text=h.name+' · '+STAGES[lifeStage(h)]+(h.id===state.player.humanId?' · 나':'')+(h.work?'\n'+ACTION_LABELS[h.work.kind]+' '+(h.work.total-h.work.remaining)+'/'+h.work.total:'');
   }
   route.clear();const h=state.world.humans.find(h=>h.id===selected&&h.alive);
   if(h)for(const tile of h.path){const p=toIso(tile);route.ellipse(p.x,p.y,2.5,1.3).fill({color:0xe5cd92,alpha:.55});}
@@ -115,12 +117,12 @@ export async function createRenderer(host:HTMLElement,initial:SimulationSnapshot
    const h=state.world.humans.find(h=>h.id===id)!;const before={...a.motion.position};const pos=a.motion.advance(dt,playback.paused);const dx=pos.x-before.x,dy=pos.y-before.y;
    const moving=a.motion.moving||Math.abs(dx)+Math.abs(dy)>.001;
    if(Math.abs(dx)+Math.abs(dy)>.001){a.facing=dy<0?'back':'front';if(Math.abs(dx)>.01)a.flip=dx<0?-1:1;}
-   const action=moving?'walk':h.work?(h.work.kind==='explore'?'survey':h.work.kind):h.action==='explore'?'survey':['fish','build','tend'].includes(h.action)?h.action:h.action==='rest'?'rest':h.action==='gather'?'work':h.action==='socialize'?'talk':'idle';
+   const action=moving?'walk':h.work?(h.work.kind==='explore'?'survey':h.work.kind):h.action==='explore'?'survey':['fish','build','tend'].includes(h.action)?h.action:h.action==='rest'?'rest':h.action==='gather'?'work':(h.action==='socialize'||h.action==='observe')?'talk':'idle';
    const frame=Math.floor((elapsed*(moving?9:action==='work'?7:3)+a.phase))%6;
    a.axe.visible=h.knowledge.includes('stone')&&(h.action==='gather'||moving);a.axe.x=a.flip*11;a.axe.rotation=Math.sin(elapsed*7+a.phase)*(h.action==='gather'?.3:.1);
    a.basket.visible=h.knowledge.includes('storage')&&h.food>0;
    a.fire.visible=h.knowledge.includes('fire')&&!moving&&h.food>0;a.fire.texture=sheet.textures[`fire${Math.floor(elapsed*9+a.phase)%6}`];
-   a.body.texture=sheet.textures[`human${Number(h.id.replace('human-',''))%3}-${a.facing}-${action}${frame}`];a.body.scale.x=a.flip;
+   a.body.texture=sheet.textures[`human${Number(h.id.replace('human-',''))%3}-${a.facing}-${action}${frame}`];const size=lifeStage(h)==='child'?.66:lifeStage(h)==='youth'?.85:1;a.body.scale.set(a.flip*size,size);a.body.tint=lifeStage(h)==='elder'?0xd8d2c5:0xffffff;
    a.node.position.set(pos.x,pos.y);a.node.zIndex=pos.y;a.node.alpha=Math.min(1,a.age*2);
    // Canopies soften near the observed human so the subject remains readable.
    i++;

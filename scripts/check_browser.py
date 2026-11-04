@@ -18,7 +18,7 @@ with sync_playwright() as p:
  assert '완료' in page.locator('.world-toast').inner_text()
  page.get_by_role('button',name='설정',exact=False).click()
  with page.expect_download() as dl:page.get_by_role('button',name='저장 파일 내려받기').click()
- snap=json.load(open(dl.value.path()));assert snap['version']==4
+ snap=json.load(open(dl.value.path()));assert snap['version']==5
  # Approved legacy retirement migration, retaining world and original character.
  old=json.loads(json.dumps(snap));old['version']=2;old['player']['phase']='successor'
  old['player']['summary']={'retired':True,'humanId':'human-1','name':'아라','startedDay':0,'diedDay':old['world']['day'],'knowledge':[],'relationships':{}}

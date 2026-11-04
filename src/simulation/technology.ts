@@ -13,7 +13,7 @@ export interface TechOrder {kind:'experiment'|'teach';id:TechnologyId;targetId?:
 export interface TechStatus {holders:number;adopted:boolean;everDiscovered:boolean}
 export interface TechRecord {day:number;text:string}
 export function canExperiment(w:WorldState,h:HumanState,id:TechnologyId):boolean {
- if(!h.alive||h.knowledge.includes(id)||h.food<1||h.fatigue>85)return false;
+ if(!h.alive||h.ageDays<6*365||h.knowledge.includes(id)||h.food<1||h.fatigue>85)return false;
  if(id==='fire')return w.day>=3&&h.visited.length>=3;
  if(id==='cultivation')return h.knowledge.includes('storage')&&w.landscape.sites.some(s=>s.kind==='seeds'&&s.discoverers.includes(h.id))&&w.landscape.structures.some(s=>s.kind==='shelter'&&s.progress>=3);
  if(id==='storage')return h.food>=2;

@@ -26,7 +26,7 @@ describe('seeded random', () => {
 describe('daily simulation', () => {
   it('replays identical daily commands and stores zero-based tick numbers', () => {
     const a = started(42), b = started(42);
-    for (let i=0; i<365; i++) { a.acknowledgeEvent(); b.acknowledgeEvent(); a.step(); b.step(); }
+    for (let i=0; i<365; i++) { a.chooseLifePath('later'); b.chooseLifePath('later'); a.acknowledgeEvent(); b.acknowledgeEvent(); a.step(); b.step(); }
     expect(a.snapshot()).toEqual(b.snapshot());
     expect(a.snapshot().world.day).toBe(365);
     expect(a.snapshot().commands.filter(c=>c.type==='wait')[364]).toEqual({tick:364,type:'wait'});

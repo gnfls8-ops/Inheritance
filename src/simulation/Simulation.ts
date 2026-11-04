@@ -1,3 +1,6 @@
+import {initialLife,lifeStage,caregiver} from './life';
+import {lifeEvents,resolveLifeChoice} from './lifeEvents';
+import {BIOMES} from './map';
 import {initialLandscape,landscapeDay} from './landscape';
 import {populationDay} from './population';
 import {remember,nameOf,withParticle} from './chronicle';
@@ -23,31 +26,32 @@ export class Simulation {
       landscape:initialLandscape(map),
       legacy:{people:{},transmissions:[]},era: 'prehistory', day: 0, map,
       technologies:{cultivation:{holders:0,adopted:false,everDiscovered:false},fire:{holders:0,adopted:false,everDiscovered:false},stone:{holders:0,adopted:false,everDiscovered:false},storage:{holders:0,adopted:false,everDiscovered:false}},technologyLog:[],resources: [], activityLog: [],
-      region: { id: 'valley', name: '이름 없는 골짜기', humanIds: [] }, humans: [],
+      region: { id: 'valley', name: BIOMES[map.biome!].name, humanIds: [] }, humans: [],
     };
-    world.resources=world.map.tiles.map(t=>t==='forest'?6:t==='grass'?3:0);
+    world.resources=world.map.tiles.map(t=>t==='forest'?6:t==='grass'?3:t==='sand'?1:0);
     for (let i=0;i<12;i++) {
       const id = `human-${i+1}`;
-      world.humans.push({id,name:['아라','누리','이솔','마루','가람','여울','하람','다온','나래','도담','해솔','새나'][i],position:{x:21+i%4,y:22+Math.floor(i/4)},path:[],ageDays:(18+i*2)*365,work:null,command:null,socialCooldown:{},deathCause:null,alive:true,deathDay:null,health:100,hunger:15,fatigue:10,loneliness:20,food:2,traits:{curiosity:Math.floor(this.random.next()*101),stability:Math.floor(this.random.next()*101),sociability:Math.floor(this.random.next()*101),riskTaking:Math.floor(this.random.next()*101)},techOrder:null,learnedAt:{},knowledge:[],relationships:{},action:'idle',control:'auto',targetHumanId:null,visited:[(22+Math.floor(i/4))*48+21+i%4],reason:'자율 행동 대기'});
+      world.humans.push({life:initialLife({x:21+i%4,y:22+Math.floor(i/4)},i>=8&&i<10?'human-1':null),id,name:['아라','누리','이솔','마루','가람','여울','하람','다온','나래','도담','해솔','새나'][i],position:{x:21+i%4,y:22+Math.floor(i/4)},path:[],ageDays:([18,20,24,30,36,42,48,54,8,14,62,70][i])*365,work:null,command:null,socialCooldown:{},deathCause:null,alive:true,deathDay:null,health:100,hunger:15,fatigue:10,loneliness:20,food:2,traits:{curiosity:Math.floor(this.random.next()*101),stability:Math.floor(this.random.next()*101),sociability:Math.floor(this.random.next()*101),riskTaking:Math.floor(this.random.next()*101)},techOrder:null,learnedAt:{},knowledge:[],relationships:{},action:'idle',control:'auto',targetHumanId:null,visited:[(22+Math.floor(i/4))*48+21+i%4],reason:'자율 행동 대기'});
       world.region.humanIds.push(id);world.legacy.people[id]={name:world.humans.at(-1)!.name,entries:[]};
     }
-    this.data = { player:{humanId:null,phase:'choose',startedDay:0,summary:null}, timeline:initialTimeline(), version: 4, seed, randomState: this.random.state, world, commands: [] };
+    this.data = { player:{humanId:null,phase:'choose',startedDay:0,summary:null}, timeline:initialTimeline(), version: 5, seed, randomState: this.random.state, world, commands: [] };
   }
   static restore(raw:unknown):Simulation {
     if(!raw||typeof raw!=='object')throw new Error('잘못된 스냅샷');
     const value=structuredClone(raw) as SimulationSnapshot;
     const version=(raw as {version?:number}).version;
-    if(![1,2,3,4].includes(version??0)||!value.world||!Array.isArray(value.world.humans)||!value.player||!Array.isArray(value.commands)||!Number.isInteger(value.world.day)||value.world.day<0)throw new Error('지원하지 않는 저장 데이터');
-    if(version===1){value.timeline=initialTimeline();value.timeline.nextHuman=Math.max(13,...value.world.humans.map(h=>Number(h.id.replace('human-',''))+1).filter(Number.isFinite));value.version=4;}
+    if(![1,2,3,4,5].includes(version??0)||!value.world||!Array.isArray(value.world.humans)||!value.player||!Array.isArray(value.commands)||!Number.isInteger(value.world.day)||value.world.day<0)throw new Error('지원하지 않는 저장 데이터');
+    if(version===1){value.timeline=initialTimeline();value.timeline.nextHuman=Math.max(13,...value.world.humans.map(h=>Number(h.id.replace('human-',''))+1).filter(Number.isFinite));value.version=5;}
     if(version===1||version===2){
-      value.version=4;value.world.legacy??={people:{},transmissions:[]};value.timeline.requestUntil??={};
+      value.version=5;value.world.legacy??={people:{},transmissions:[]};value.timeline.requestUntil??={};
       for(const h of value.world.humans){h.command??=null;h.socialCooldown??={};h.deathCause??=h.alive?null:h.ageDays>=80*365?'노령':'건강 악화 (이전 기록)';value.world.legacy.people[h.id]??={name:h.name,entries:[]};}
       for(const e of value.world.activityLog)e.humanName??=nameOf(value.world,e.humanId);
       const old=value.world.humans.find(h=>h.id===value.player.humanId);
       if(value.player.summary?.retired&&old?.alive){value.player.phase='playing';value.player.summary=null;value.timeline.mode='daily';}
       else if(value.player.summary?.retired&&old&&!old.alive){value.player.summary.retired=false;value.player.summary.diedDay=old.deathDay??value.world.day;value.player.summary.cause=old.deathCause??'이전 기록';}
     }
-    if(version!==4){value.version=4;value.world.landscape=initialLandscape(value.world.map);value.world.technologies.cultivation={holders:0,adopted:false,everDiscovered:false};for(const h of value.world.humans)h.work=null;}
+    if(version!==4&&version!==5){value.version=5;value.world.landscape=initialLandscape(value.world.map);value.world.technologies.cultivation={holders:0,adopted:false,everDiscovered:false};for(const h of value.world.humans)h.work=null;}
+    if(version!==5){value.version=5;for(const h of value.world.humans)h.life??=initialLife(h.position);}
     if(!value.timeline||!['daily','life','history'].includes(value.timeline.mode))throw new Error('잘못된 시간 상태');
     validateSnapshot(value);
     const sim=new Simulation(value.seed);sim.random=new SeededRandom(value.randomState);sim.data=value;return sim;
@@ -58,7 +62,7 @@ export class Simulation {
     this.data.timeline.mode=mode;this.data.commands.push({tick:this.data.world.day,type:'mode',mode});return true;
   }
   retire():boolean {return false;}
-  acknowledgeEvent():boolean {if(!this.data.timeline.pending)return false;this.data.timeline.pending=null;this.data.commands.push({tick:this.data.world.day,type:'event',humanId:this.data.player.humanId??''});return true;}
+  acknowledgeEvent():boolean {if(!this.data.timeline.pending||this.data.timeline.pending.id.startsWith('life-'))return false;this.data.timeline.pending=null;this.data.commands.push({tick:this.data.world.day,type:'event',humanId:this.data.player.humanId??''});return true;}
   canAdvance():boolean {return !this.data.timeline.pending&&(this.data.player.phase==='playing'||this.data.player.phase==='successor'&&this.data.timeline.mode==='history');}
   advance(days:number=TIME_MODES[this.data.timeline.mode].days):number {
     if(!Number.isInteger(days)||days<0||days>365000)throw new Error('잘못된 진행 일수');
@@ -77,8 +81,9 @@ export class Simulation {
     if(!t.pending&&s.player.phase==='playing'&&w.day-s.player.startedDay>=900&&w.humans.some(o=>o.alive&&o.id!==h?.id)&&dayChance(s.seed,w.day,721)<1/600){const other=w.humans.filter(o=>o.alive&&o.id!==h?.id).sort((a,b)=>Math.abs(a.position.x-h!.position.x)+Math.abs(a.position.y-h!.position.y)-Math.abs(b.position.x-h!.position.x)-Math.abs(b.position.y-h!.position.y))[0];if(other)emit('encounter',`${withParticle(other.name)} 만날 기회`,true,900,other);}
     if(!t.pending&&Object.values(w.technologies).some(v=>v.adopted))emit('adoption','기술이 공동체의 관습으로 자리 잡았습니다',true,365*500);
     if(!t.pending&&t.culture.tradition>=30&&w.day>=365*500&&dayChance(s.seed,w.day,722)<1/(365*1000))emit('culture','오랜 전승이 새로운 공동체 문화로 성장했습니다',true,365*1000);
-    if(dayChance(s.seed,w.day,723)<1/20)emit('daily','골짜기의 일상과 관계가 이어집니다',false,30);
+    if(dayChance(s.seed,w.day,723)<1/20)emit('daily','이 땅의 일상과 관계가 이어집니다',false,30);
   }
+  chooseLifePath(choice:'stay'|'migrate'|'invite'|'later'|'settle'|'roam'):string {return resolveLifeChoice(this.data,this.random,choice);}
   snapshot(): SimulationSnapshot { return structuredClone(this.data); }
   choosePlayer(id:string):boolean {
     const p=this.data.player,h=this.data.world.humans.find(h=>h.id===id&&h.alive);
@@ -140,6 +145,7 @@ export class Simulation {
   move(humanId: string, target: Point): boolean {
     const human = this.data.world.humans.find(h => h.id === humanId);
     if (!human||!this.controls(humanId)) return false;
+    if(lifeStage(human)==='child'){const adult=caregiver(this.data.world,human);const distance=(a:Point,b:Point)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);if(distance(human.position,target)>2&&(!adult||distance(adult.position,target)>2))return false;}
     const path = findPath(this.data.world.map, human.position, target);
     if (!path) return false;
     human.work=null;human.techOrder=null;human.path = path; human.control='player';human.action='move';human.targetHumanId=null;human.reason='플레이어 이동 지시';this.feedback(human,'이동');
@@ -148,10 +154,10 @@ export class Simulation {
   }
   act(humanId:string,action:Activity):boolean {
     const human=this.data.world.humans.find(h=>h.id===humanId);
-    if(!human||!this.controls(humanId)||!['gather','explore','rest','socialize','fish','build','tend'].includes(action))return false;
+    if(!human||!this.controls(humanId)||!['gather','explore','rest','socialize','fish','build','tend','observe'].includes(action))return false;
     const previous=structuredClone(human), previousRandom=this.random.state;
     if(!planAction(this.data.world,human,action,this.random)){Object.assign(human,previous);this.random=new SeededRandom(previousRandom);return false;}
-    human.techOrder=null;human.control='player';human.reason='플레이어 행동 지시';this.feedback(human,({gather:'채집',explore:'탐험',rest:'휴식',socialize:'교류',fish:'낚시',build:'거처 짓기',tend:'밭 돌보기'})[action]);
+    human.techOrder=null;human.control='player';human.reason='플레이어 행동 지시';this.feedback(human,({gather:'채집',explore:'탐험',rest:'휴식',socialize:'교류',fish:'낚시',build:'거처 짓기',tend:'밭 돌보기',observe:'관찰하며 배우기'})[action]);
     this.data.commands.push({tick:this.data.world.day,type:'action',humanId,action});
     this.data.randomState=this.random.state;return true;
   }
@@ -187,6 +193,7 @@ export class Simulation {
     this.data.world.day += 1;
     landscapeDay(this.data);
     this.events();
+    lifeEvents(this.data);
     this.data.randomState = this.random.state;
   }
 }

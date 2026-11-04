@@ -79,7 +79,7 @@ def collect(args):
    if checks[-1]['status']=='passed':
     checks.append(command(['npm','test','--','--reporter=json','--outputFile='+str(stage/'test-results.json')],stage,'tests'))
    if args.browser and all(c['status']=='passed' for c in checks):
-    if args.browser not in ['scripts/check_living_world.py','scripts/check_browser.py','scripts/check_release.py']:raise ValueError('허용되지 않은 브라우저 검사')
+    if args.browser not in ['scripts/check_living_world.py','scripts/check_browser.py','scripts/check_release.py','scripts/check_life_world.py']:raise ValueError('허용되지 않은 브라우저 검사')
     checks.append(command(['python',args.browser],stage,'browser'))
   if not archive and args.dashboard:
    checks.append(command(['python','dev-dashboard/test_regressions.py'],stage,'dashboard-regressions'))

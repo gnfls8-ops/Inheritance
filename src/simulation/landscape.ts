@@ -1,6 +1,6 @@
 import type {HumanState,SimulationSnapshot,WorldState} from './model';
 import type {Point,TileMap} from './map';
-import {walkable} from './map';
+import {walkable,findPath} from './map';
 import {dayChance} from './time';
 import {remember} from './chronicle';
 export type Weather='clear'|'bounty'|'drought'|'flood';
@@ -15,11 +15,13 @@ export function besideRiver(map:TileMap,p:Point){return [[1,0],[-1,0],[0,1],[0,-
 export function initialLandscape(map:TileMap):Landscape{
  const definitions=[['berries','열매 군락',23,20],['spring','맑은 샘',18,24],['flint','쓸 만한 돌 산지',26,25],['seeds','야생 곡물 군락',23,28]] as const;
  const used=new Set<number>();
- const sites=definitions.map(([kind,name,x,y],i)=>{
+ const sites:Site[]=definitions.map(([kind,name,x,y],i)=>{
   const points=map.tiles.map((_,n)=>({x:n%48,y:Math.floor(n/48)})).filter(p=>walkable(map,p)&&!used.has(p.y*48+p.x)).sort((a,b)=>distance(a,{x,y})-distance(b,{x,y}));
-  const position=points[0];used.add(position.y*48+position.x);return{id:'site-'+i,kind,name,position,discoverers:[]};
+  const position=points.find(p=>findPath(map,{x:21,y:22},p)!==null)!;used.add(position.y*48+position.x);return{id:'site-'+i,kind,name,position,discoverers:[]};
  });
- return{sites,structures:[],weather:'clear',forecast:null,chapter:'foraging',chapters:[{stage:'foraging',day:0}],harvests:0};
+ const structures:Structure[]=map.biome==='oldcamp'?[{id:'old-camp',kind:'shelter',position:{x:24,y:26},progress:1,ownerId:'past-group',ownerName:'이전 집단',plantedDay:null,harvests:0}]:[];
+ if(map.biome==='oldcamp')sites.find(s=>s.kind==='flint')!.name='옛 야영지의 돌 도구 흔적';
+ return{sites,structures,weather:'clear',forecast:null,chapter:'foraging',chapters:[{stage:'foraging',day:0}],harvests:0};
 }
 export function survey(w:WorldState,h:HumanState):string{
  const site=w.landscape.sites.find(s=>distance(s.position,h.position)<=1&&!s.discoverers.includes(h.id));
@@ -41,7 +43,7 @@ export function landscapeDay(s:SimulationSnapshot){
  const w=s.world,l=w.landscape,day=w.day;
  if(day>=42&&(day-42)%120===0){
   const n=dayChance(s.seed,Math.floor(day/120),930);
-  const kind:Weather=n<.45?'bounty':n<.75?'drought':'flood';
+  const kind:Weather=w.map.biome==='oasis'?(n<.3?'bounty':'drought'):n<.45?'bounty':n<.75?'drought':'flood';
   l.forecast={kind,starts:day+3,ends:day+33};
   const player=w.humans.find(h=>h.id===s.player.humanId&&h.alive);
   const exposedCrop=player&&l.structures.some(b=>b.kind==='plot'&&b.ownerId===player.id&&b.plantedDay!==null&&besideRiver(w.map,b.position));
@@ -51,10 +53,10 @@ export function landscapeDay(s:SimulationSnapshot){
  l.weather=l.forecast&&day>=l.forecast.starts&&day<l.forecast.ends?l.forecast.kind:'clear';
  if(day%7===0){
   w.resources=w.resources.map((value,i)=>{
-   const tile=w.map.tiles[i];if(tile!=='grass'&&tile!=='forest')return value;
+   const tile=w.map.tiles[i];if(tile!=='grass'&&tile!=='forest'&&tile!=='sand')return value;
    const p={x:i%48,y:Math.floor(i/48)};
-   const growth=l.weather==='drought'?0:(w.technologies.storage.adopted?2:1)+(l.weather==='bounty'?2:0);
-   return Math.max(0,Math.min(tile==='forest'?6:3,value+growth-(l.weather==='flood'&&besideRiver(w.map,p)?3:0)));
+   const growth=tile==='sand'&&day%28!==0?0:l.weather==='drought'?0:(w.technologies.storage.adopted?2:1)+(l.weather==='bounty'?2:0);
+   return Math.max(0,Math.min(tile==='forest'?6:tile==='sand'?1:3,value+growth-(l.weather==='flood'&&besideRiver(w.map,p)?3:0)));
   });
  }
  if(l.weather==='flood'&&l.forecast?.starts===day){
