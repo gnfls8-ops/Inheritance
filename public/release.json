@@ -1,1 +1,6 @@
-{"version":"0.8.0","date":"2026-11-04","saveVersion":5,"scope":"seeded-biomes-life-stages-and-life-choices"}
+{
+  "version": "2.3.0",
+  "scenario": "Arcadia 2026–2050",
+  "saveVersion": 23,
+  "buildDate": "2026-11-04"
+}

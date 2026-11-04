@@ -1,0 +1,12 @@
+import {readFile,writeFile,readdir} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+const release=JSON.parse(await readFile('dist/release.json','utf8'));release.sourceCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();release.sourceDirty=!!execFileSync('git',['status','--porcelain','--','src','public','scripts','package.json','package-lock.json','vite.config.ts'],{encoding:'utf8'}).trim();release.builtAt=new Date().toISOString();await writeFile('dist/release.json',JSON.stringify(release,null,2)+'\n');
+const index=await readFile('dist/index.html','utf8'),assets=(await readdir('dist/assets')).map(x=>'./assets/'+x),files=['./','./index.html','./release.json',...assets];
+const hash=createHash('sha256').update(index).digest('hex').slice(0,12);
+await writeFile('dist/sw.js',`const CACHE='inheritance-future-${hash}';const FILES=${JSON.stringify(files)};
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('inheritance-future-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==self.location.origin)return;if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).catch(()=>caches.match('./index.html')));return;}e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));});
+`);
+console.log('Offline cache: '+files.length+' local files, '+hash);
