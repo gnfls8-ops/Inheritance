@@ -9,6 +9,8 @@ with sync_playwright() as p:
  page.goto(os.environ.get('INHERITANCE_URL','http://127.0.0.1:4180'),wait_until='networkidle')
  page.get_by_role('button',name='아라의 삶 시작',exact=True).click();page.locator('canvas').wait_for()
  def panel(name):
+  # The new optional life crossroads can coexist with the climate fixture at day 45.
+  if page.get_by_role('button',name='결정 미루기 · 60일 뒤 다시',exact=True).count():page.get_by_role('button',name='결정 미루기 · 60일 뒤 다시',exact=True).click()
   if page.get_by_role('button',name='창 닫기',exact=True).count():page.get_by_role('button',name='창 닫기',exact=True).click()
   page.get_by_role('navigation',name='게임 메뉴').get_by_role('button',name=name,exact=False).click()
  def download():
@@ -22,7 +24,9 @@ with sync_playwright() as p:
   if page.get_by_role('button',name='창 닫기',exact=True).count():page.get_by_role('button',name='창 닫기',exact=True).click()
   start=int(''.join(c for c in page.locator('.timebar strong').inner_text() if c.isdigit()))
   page.get_by_role('button',name='시간 재생',exact=True).click()
-  page.wait_for_function("(target)=>parseInt(document.querySelector('.timebar strong').innerText.replace(/[^0-9]/g,''))>=target",arg=start+days)
+  # Pause in the same browser poll that observes the target day: a second
+  # actionability-waiting click can advance past a one-day work stage.
+  page.wait_for_function("""(target)=>{const day=parseInt(document.querySelector('.timebar strong').innerText.replace(/[^0-9]/g,''));if(day<target)return false;document.querySelector('[aria-label="시간 일시정지"]')?.click();return true;}""",arg=start+days)
   if page.get_by_role('button',name='시간 일시정지',exact=True).count():page.get_by_role('button',name='시간 일시정지',exact=True).click()
  def action(name):
   panel('인물·행동');page.get_by_role('button',name=name,exact=True).click()
@@ -36,7 +40,7 @@ with sync_playwright() as p:
  h=fish['world']['humans'][0];h['position']={'x':i%48,'y':i//48};h['food']=10;h['hunger']=0
  load(fish);action('낚시');run(1);mid=download();assert mid['world']['humans'][0]['work']['remaining']==2
  load(mid);run(2);assert '낚시 완료' in page.locator('.world-toast').inner_text()
- home=copy.deepcopy(base);home['world']['humans'][0]['food']=10
+ home=copy.deepcopy(base);home['world']['humans'][0]['food']=10;home['world']['landscape']['structures']=[]
  load(home);action('거처 짓기');run(1);assert download()['world']['landscape']['structures'][0]['progress']==1
  run(2);built=download();assert built['world']['landscape']['structures'][0]['progress']==3
  # Ready crop + learned knowledge, then actual harvest triggers the new chapter.
