@@ -6,8 +6,8 @@ import {cityPath} from './path';
 import {followCamera} from './camera';
 import {MotionTrack} from '../rendering/motion';
 const iso=(x:number,y:number)=>({x:(x-y)*19,y:(x+y)*9.5});
-export function City({state,paused,onObserve,follow,frame,mode,trackedId,speed}:{mode:'life'|'city';trackedId:string|null;speed:number;state:State;paused:boolean;onObserve:(id:string)=>void;follow:number;frame?:CityFrame}){
- const host=useRef<HTMLDivElement>(null),latest=useRef({state,paused,onObserve,follow,frame,mode,trackedId,speed});latest.current={state,paused,onObserve,follow,frame,mode,trackedId,speed};
+export function City({state,paused,onObserve,follow,frame,mode,trackedId,speed,replayRunning}:{replayRunning:boolean;mode:'life'|'city';trackedId:string|null;speed:number;state:State;paused:boolean;onObserve:(id:string)=>void;follow:number;frame?:CityFrame}){
+ const host=useRef<HTMLDivElement>(null),latest=useRef({state,paused,onObserve,follow,frame,mode,trackedId,speed,replayRunning});latest.current={state,paused,onObserve,follow,frame,mode,trackedId,speed,replayRunning};
  useEffect(()=>{
   const app=new Application();let disposed=false,ready=false,resize:ResizeObserver|undefined;
   const cleanup: Array<()=>void>=[];
@@ -72,7 +72,7 @@ export function City({state,paused,onObserve,follow,frame,mode,trackedId,speed}:
    const cars=Array.from({length:8},(_,i)=>{const g=new Graphics();g.poly([-9,-2,0,-7,10,-2,1,3]).fill(i%2?0x829ea7:0xdac6a8).rect(-3,-7,8,4).fill(0x49636c).rect(-7,0,3,2).fill(0x172a2e).rect(5,0,3,2).fill(0x172a2e);traffic.addChild(g);return g;});
    const robots=Array.from({length:3},()=>{const g=new Graphics();g.rect(-4,-9,8,8).fill(0xb0c4bd).rect(-3,-13,6,4).fill(0x446c78).rect(-2,-12,4,1).fill(0x9df0d7).rect(-4,-1,3,2).fill(0x1e343b).rect(2,-1,3,2).fill(0x1e343b);objects.addChild(g);return g;});
    app.ticker.add(ticker=>{
-    const {state:s,paused,onObserve,follow,frame,mode,trackedId,speed}=latest.current;redraw();if(!paused||frame)time+=ticker.deltaMS/1000;
+    const {state:s,paused,onObserve,follow,frame,mode,trackedId,speed,replayRunning}=latest.current;redraw();if(!paused||replayRunning)time+=ticker.deltaMS/1000;
     robots.forEach((g,i)=>{const c=frame?.city??s.city,b=c.buildings.find(b=>b.kind==='factory')!;g.visible=b.equipment===2&&b.operating;const x=28,y=14+i+Math.sin(time+i)*.3,p=iso(x,y);g.position.set(p.x,p.y);g.zIndex=x+y;});
     cars.forEach((g,i)=>{const c=frame?.city??s.city,p=iso((time*(1+c.transit/100)+i*4)%30,i%2?10.4:18.6);g.position.set(p.x,p.y);g.visible=i<3+Math.floor(c.transit/15);});
     const player=frame?undefined:s.population.find(h=>h.id===(trackedId??s.playerId)&&h.alive);const visible=frame?[]:s.population.filter(h=>h.alive).sort((a,b)=>Math.hypot(a.target.x-(player?.target.x??15),a.target.y-(player?.target.y??15))-Math.hypot(b.target.x-(player?.target.x??15),b.target.y-(player?.target.y??15))).slice(0,23);if(player?.alive&&!visible.includes(player))visible.push(player);
