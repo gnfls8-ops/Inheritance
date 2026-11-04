@@ -1,11 +1,13 @@
 import {SeededRandom} from '../simulation/random';
-import {ACTIONS,INITIAL,INITIAL_RULES,END_DAY,clamp,dateOf,dayOfYear,monthsLater,yearOf,ageYears} from './model';
+import {ACTIONS,METRICS,INITIAL,INITIAL_RULES,END_DAY,clamp,dateOf,dayOfYear,monthsLater,yearOf,ageYears} from './model';
 import type {Action,Metric,Priority,State,LifeRecord} from './model';
 import {WORLD_EVENTS,PERSONAL_EVENTS} from './content';
 import {createPopulation,humanDay,canAct,personalLog} from './people';
 import {applyMetrics,worldMonth,economyMonth,seekJob,classifyEnding} from './world';
 import {createCity,initialGlobal,globalMonth,cityMonth,migrate} from './layers';
 import type {CityFrame} from './model';
+import {dailyRoutines,eventContext,repeatAllowed} from './living';
+import {startConsequences,processConsequences,trace} from './consequences';
 import {validate} from './validation';
 export class FutureSimulation {
  private state:State;
@@ -14,7 +16,7 @@ export class FutureSimulation {
  drainCityFrames(){const result=this.frames;this.frames=[];return result;}
  constructor(seed=2026){
   this.rng=new SeededRandom(seed);const population=createPopulation(this.rng);
-  this.state={version:23,global:initialGlobal(),nation:{id:'arcadia',name:'아르카디아',metrics:{...INITIAL}},city:createCity(),seed,randomState:this.rng.state,day:0,phase:'world-event',rules:{...INITIAL_RULES},population,playerId:null,observedId:null,assignment:null,pending:'E01',policies:[],delayed:[],applied:[],chronicle:[{day:0,kind:'world',text:'2026년 · 선택한 미래를 다른 인간의 삶으로 경험합니다.'}],lives:[],perspectives:[],lastPersonalDay:0,causes:Object.fromEntries(Object.keys(INITIAL).map(k=>[k,{delta:0,text:'2026년 가상 초기값'}])) as State['causes'],ending:null,commands:[],tutorialSeen:false};
+  this.state={version:24,impacts:[],chains:[],followups:[],global:initialGlobal(),nation:{id:'arcadia',name:'아르카디아',metrics:{...INITIAL}},city:createCity(),seed,randomState:this.rng.state,day:0,phase:'world-event',rules:{...INITIAL_RULES},population,playerId:null,observedId:null,assignment:null,pending:'E01',policies:[],delayed:[],applied:[],chronicle:[{day:0,kind:'world',text:'2026년 · 선택한 미래를 다른 인간의 삶으로 경험합니다.'}],lives:[],perspectives:[],lastPersonalDay:0,causes:Object.fromEntries(Object.keys(INITIAL).map(k=>[k,{delta:0,text:'2026년 가상 초기값'}])) as State['causes'],ending:null,commands:[],tutorialSeen:false};
  }
  snapshot():State{return structuredClone(this.state);}
  static restore(raw:unknown){const value=migrate(raw);validate(value);const sim=new FutureSimulation(value.seed);sim.state=value;sim.rng=new SeededRandom(value.randomState);return sim;}
@@ -24,9 +26,10 @@ export class FutureSimulation {
  choosePolicy(index:number){
   const s=this.state,e=WORLD_EVENTS.find(e=>e.id===s.pending);
   if(s.phase!=='world-event'||!e||!Number.isInteger(index)||!e.choices[index]||s.policies.some(p=>p.id===e.id))return false;
-  const choice=e.choices[index];applyMetrics(s,choice.instant,e.title+' · '+choice.label);
+  const choice=e.choices[index],before={...s.nation.metrics};applyMetrics(s,choice.instant,e.title+' · '+choice.label);
   for(const [k,v] of Object.entries(choice.rules)){const key=k as keyof State['rules'];s.rules[key]=clamp(s.rules[key]+v!,-.6,1.5);}
   s.policies.push({id:e.id,choice:index,day:s.day});s.delayed.push({id:e.id+':delayed',due:monthsLater(s.day,choice.months),effects:{...choice.delayed}});
+  startConsequences(s,e.id,index,choice,before);
   this.log('policy',`${e.title} → ${choice.label} · ${choice.benefit} / ${choice.risk}`);
   for(const h of s.population)if(h.alive&&h.id===s.playerId)personalLog(h,s.day,`${choice.label} · 이후의 생활에 정책의 영향이 반영됩니다.`);
   s.pending=null;s.phase='playing';this.command('policy',e.id+':'+index);
@@ -37,24 +40,28 @@ export class FutureSimulation {
   const pool=eligible.length?eligible:s.population.filter(h=>h.alive&&ageYears(h)>=10);
   if(!pool.length){this.finish();return;}
   const h=pool[Math.floor(this.rng.next()*pool.length)];s.playerId=h.id;s.observedId=h.id;s.assignment={day:s.day,assets:h.assets,happiness:h.happiness,world:{...s.nation.metrics}};s.phase='assignment';s.lastPersonalDay=s.day;
-  this.log('perspective',`${h.name} · ${ageYears(h)}세 · 새로운 관점. 정책 수혜/피해와 무관하게 현재 인구에서 추첨했습니다.`);this.command('assignment',h.id);
+  this.log('perspective',`${h.name} · ${ageYears(h)}세 · 새로운 관점. 정책 수혜/피해와 무관하게 현재 인구에서 추첨했습니다.`);this.command('assignment',h.id);dailyRoutines(s);
  }
  acceptAssignment(){if(this.state.phase!=='assignment')return false;this.state.phase=this.state.tutorialSeen?'playing':'tutorial';return true;}
  finishTutorial(){if(this.state.phase!=='tutorial')return false;this.state.tutorialSeen=true;this.state.phase='playing';return true;}
- act(id:string,action:Action){const s=this.state,h=this.current();if(s.phase!=='playing'||!h||id!==s.playerId||!Object.hasOwn(ACTIONS,action)||!canAct(h,action))return false;h.order=action;this.command('action',action);return true;}
+ act(id:string,action:Action){const s=this.state,h=this.current();if(s.phase!=='playing'||!h||id!==s.playerId||!Object.hasOwn(ACTIONS,action)||!canAct(h,action,s))return false;h.order=action;this.command('action',action);return true;}
  setPriority(id:string,priority:Priority){const h=this.current();if(this.state.phase!=='playing'||!h||id!==h.id||!['balance','wealth','knowledge','expression','connection'].includes(priority))return false;h.priority=priority;this.command('priority',priority);return true;}
  retire(){const h=this.current();if(this.state.phase!=='playing'||!h||ageYears(h)<60||h.retired)return false;h.previousJob=h.job==='unemployed'?h.previousJob:h.job;h.job='unemployed';h.employed=false;h.retired=true;h.order=null;personalLog(h,this.state.day,'은퇴를 선택했습니다. 소득은 사회보장과 개인 자산에 의존합니다.');this.command('retire',h.id);return true;}
  choosePersonal(index:number){
   const s=this.state,h=this.current(),e=PERSONAL_EVENTS.find(e=>e.id===s.pending);
   if(s.phase!=='personal-event'||!h||!e||!Number.isInteger(index)||!e.choices[index])return false;
-  const c=e.choices[index];
-  for(const [key,value] of Object.entries(c.effects)){const k=key as keyof typeof c.effects;if(k==='assets')h.assets+=value!;else h[k]=clamp(h[k]+value!);}
+  const c=e.choices[index],actual:string[]=[];
+  for(const [key,value] of Object.entries(c.effects)){const k=key as keyof typeof c.effects,before=h[k];if(k==='assets')h.assets+=value!;else h[k]=clamp(h[k]+value!);actual.push(`${({assets:'자산',health:'건강',stress:'스트레스',happiness:'행복',skill:'직무 숙련',aiSkill:'AI 숙련',relationships:'관계',achievement:'성취'})[k]} ${(h[k]-before)>=0?'+':''}${(h[k]-before).toFixed(1)}`);}
   if(c.training)h.trainingDue=monthsLater(s.day,3);
   if(c.job==='new')seekJob(h,s,this.rng);
   if(c.job==='lose'){h.previousJob=h.job;h.job='unemployed';h.employed=false;}
   if(c.priority)h.priority=c.priority;
+  if(e.id==='P13'&&index===1)h.order='search';
   if(e.id==='P10')h.trained=false;
   personalLog(h,s.day,e.title+' → '+c.label);this.log('personal',h.name+' · '+e.title+' → '+c.label);
+  h.eventContexts[e.id]=[...(h.eventContexts[e.id]??[]),eventContext(h,e.id)];
+  const parent=s.followups.find(f=>f.humanId===h.id&&f.eventId===e.id&&!f.resolved);if(parent){parent.resolved=true;trace(s,{policyId:parent.policyId??'personal',layer:'HUMAN',kind:'realized',humanId:h.id,change:'choice',text:`${h.name}: ${e.title} → ${c.label} · 실제 변화 ${actual.join(', ')}`,groups:['정책 영향 당사자']});}
+  if(c.training||e.id==='P13')s.followups.push({id:`follow:${h.id}:${e.id}:${s.day}`,humanId:h.id,policyId:parent?.policyId??null,due:monthsLater(s.day,c.training?4:6),eventId:c.training?'P14':'P15',resolved:false});
   h.lastEvents[e.id]=s.day;s.lastPersonalDay=s.day;s.pending=null;s.phase='playing';this.command('personal',e.id+':'+index);return true;
  }
  private closeLife(reason:string){
@@ -80,20 +87,24 @@ export class FutureSimulation {
   const s=this.state;
   for(const h of s.population)humanDay(h,s);s.day++;
   if(dateOf(s.day).getUTCDate()===1){
-   for(const effect of s.delayed.filter(d=>d.due<=s.day&&!s.applied.includes(d.id))){applyMetrics(s,effect.effects,'지연 정책 효과 · '+effect.id);s.applied.push(effect.id);this.log('delayed',effect.id.split(':')[0]+'의 지연 효과가 사회에 반영됐습니다.');}
-   s.delayed=s.delayed.filter(d=>!s.applied.includes(d.id));globalMonth(s.global);worldMonth(s);cityMonth(s);economyMonth(s,this.rng);
+   for(const effect of s.delayed.filter(d=>d.due<=s.day&&!s.applied.includes(d.id))){const before={...s.nation.metrics};applyMetrics(s,effect.effects,'지연 정책 효과 · '+effect.id);s.applied.push(effect.id);this.log('delayed',effect.id.split(':')[0]+'의 지연 효과가 사회에 반영됐습니다.');trace(s,{policyId:effect.id.split(':')[0],layer:'NATION',kind:'realized',text:'기존 지연 효과 실현: '+Object.keys(effect.effects).map(key=>{const k=key as Metric,d=s.nation.metrics[k]-before[k];return `${METRICS[k]} ${d>=0?'+':''}${d.toFixed(1)}`;}).join(', '),groups:['아르카디아 주민']},effect.id);}
+   s.delayed=s.delayed.filter(d=>!s.applied.includes(d.id));globalMonth(s.global);worldMonth(s);processConsequences(s);cityMonth(s);economyMonth(s,this.rng);
    this.frames.push({day:s.day,city:structuredClone(s.city),metrics:{...s.nation.metrics},global:{...s.global}});
   }
+  for(const person of s.population){if(person.assets>person.expenses*4)delete person.eventContexts.P06;if(person.health>75&&person.stress<35)delete person.eventContexts.P11;}
+  dailyRoutines(s);
   if(s.day>=END_DAY){this.finish();s.randomState=this.rng.state;return;}
   const h=this.current();if(!h)return;
   const milestone=[2034,2042].find(y=>s.day>=dayOfYear(y)&&!s.perspectives.includes(y));
   if(!h.alive||milestone){if(milestone)s.perspectives.push(milestone);this.closeLife(!h.alive?'사망':`${milestone}년 · 다른 인간의 관점으로`);s.randomState=this.rng.state;return;}
-  const event=WORLD_EVENTS.find(e=>!s.policies.some(p=>p.id===e.id)&&yearOf(s.day)>=e.earliest&&(!e.requires||s.policies.some(p=>p.id===e.requires))&&Object.entries(e.threshold).every(([k,v])=>s.nation.metrics[k as Metric]>=v!));
+  const event=WORLD_EVENTS.find(e=>!s.policies.some(p=>p.id===e.id)&&s.day-(s.policies.at(-1)?.day??-180)>=180&&yearOf(s.day)>=e.earliest&&(!e.requires||s.policies.some(p=>p.id===e.requires))&&Object.entries(e.threshold).every(([k,v])=>s.nation.metrics[k as Metric]>=v!));
   if(event){s.pending=event.id;s.phase='world-event';this.log('world',event.title);}
   else{
+   const follow=s.followups.find(f=>f.humanId===h.id&&!f.resolved&&f.due<=s.day);
+   if(follow){s.pending=follow.eventId;s.phase='personal-event';s.randomState=this.rng.state;return;}
    const critical=h.health<25||h.assets<-h.expenses*3;
    if(s.day-s.lastPersonalDay>=(critical?45:150)){
-    const candidates=PERSONAL_EVENTS.filter(e=>e.condition(h,s)&&s.day-(h.lastEvents[e.id]??-Infinity)>720);
+    const candidates=PERSONAL_EVENTS.filter(e=>e.condition(h,s)&&repeatAllowed(h,e.id)&&!['P13','P14','P15'].includes(e.id)&&s.day-(h.lastEvents[e.id]??-Infinity)>720);
     const event=candidates.find(e=>critical&&['P06','P11'].includes(e.id))??(candidates.length&&this.rng.next()<.035?candidates[Math.floor(this.rng.next()*candidates.length)]:undefined);
     if(event){s.pending=event.id;s.phase='personal-event';this.log('personal',h.name+' · '+event.title);}
    }

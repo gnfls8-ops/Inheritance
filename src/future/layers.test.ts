@@ -26,7 +26,7 @@ it('v2.3: finished city infrastructure changes learning, recovery, wages and hou
 });
 it('v2.3: v20 save migration preserves humans, policy, birth dates and RNG, never invents city history',()=>{
  const s=active();s.advance(60);const current=s.snapshot(),old:Record<string,unknown>={...structuredClone(current),version:20,world:current.nation.metrics};delete old.global;delete old.nation;delete old.city;
- const migrated=FutureSimulation.restore(old).snapshot();expect(migrated.version).toBe(23);expect(migrated.population).toEqual(current.population);expect(migrated.randomState).toBe(current.randomState);expect(migrated.policies).toEqual(current.policies);expect(migrated.city.history).toEqual([]);expect(migrated.global).toEqual(current.global);expect(FutureSimulation.restore(current).snapshot()).toEqual(current);
+ const migrated=FutureSimulation.restore(old).snapshot();expect(migrated.version).toBe(24);expect(migrated.population).toEqual(current.population);expect(migrated.randomState).toBe(current.randomState);expect(migrated.policies).toEqual(current.policies);expect(migrated.city.history).toEqual([]);expect(migrated.global).toEqual(current.global);expect(FutureSimulation.restore(current).snapshot()).toEqual(current);
 });
 it('v2.2: timelapse is sampled actual monthly state and reading it never advances simulation',()=>{
  const s=active();s.advance(90);const before=s.snapshot(),frames=s.drainCityFrames();expect(frames.length).toBe(3);expect(frames.map(f=>f.day)).toEqual([31,59,90]);expect(frames.at(-1)?.city).toEqual(before.city);expect(s.snapshot()).toEqual(before);expect(s.drainCityFrames()).toEqual([]);

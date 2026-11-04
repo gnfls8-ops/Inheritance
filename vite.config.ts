@@ -1,3 +1,3 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-export default defineConfig({ define: {__BUILD_VERSION__: JSON.stringify('PLAYTEST 2.3.0 · 2026-11-04')}, base: './', plugins: [react()] });
+export default defineConfig({ define: {__BUILD_VERSION__: JSON.stringify('PLAYTEST 2.4.0 · 2026-11-04')}, base: './', plugins: [react()] });

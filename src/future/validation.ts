@@ -7,20 +7,28 @@ export function validate(raw:unknown):asserts raw is State{
  if(!raw||typeof raw!=='object')fail();const s=raw as State;
  const num=(v:unknown,min=-1e9,max=1e9)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
  const day=(v:unknown)=>num(v,0,END_DAY)&&Number.isInteger(v);
- if(s.version!==23||!day(s.day)||!Number.isInteger(s.seed)||!num(s.seed,0,0xffffffff)||!Number.isInteger(s.randomState)||!num(s.randomState,0,0xffffffff))fail();
+ if(s.version!==24||!day(s.day)||!Number.isInteger(s.seed)||!num(s.seed,0,0xffffffff)||!Number.isInteger(s.randomState)||!num(s.randomState,0,0xffffffff))fail();
  if(!['world-event','assignment','tutorial','playing','personal-event','life-summary','ending'].includes(s.phase)||typeof s.tutorialSeen!=='boolean')fail();
  if(!s.nation?.metrics||Object.keys(INITIAL).some(k=>!num(s.nation.metrics[k as keyof typeof INITIAL],0,100)))fail();
  if(s.nation?.id!=='arcadia'||s.nation.name!=='아르카디아'||!s.global||Object.values(s.global).length!==3||(['technology','energyEfficiency','connectivity'] as const).some(k=>!num(s.global[k],0,100)))fail();
  if(!s.city||s.city.id!=='arcadia-capital'||!Array.isArray(s.city.buildings)||s.city.buildings.length!==10||new Set(s.city.buildings.map(b=>b.id)).size!==10||!Array.isArray(s.city.history))fail();
  for(const k of ['transit','automation','green','education'] as const)if(!num(s.city[k],0,100))fail();
  const expected=createCity().buildings;
- for(const b of s.city.buildings){const original=expected.find(v=>v.id===b.id);if(!original||(['kind','x','y','w','d','height'] as const).some(k=>b[k]!==original[k]))fail();if(!b||!['office','school','factory','art','lab','home','shop'].includes(b.kind)||!['existing','construction','complete'].includes(b.phase)||!Number.isInteger(b.level)||!num(b.level,0,2)||!num(b.progress,0,100)||!num(b.x,0,30)||!num(b.y,0,30)||!num(b.w,1,10)||!num(b.d,1,10)||!num(b.height,1,200)||b.startedDay!==null&&(!day(b.startedDay)||b.startedDay>s.day)||b.completedDay!==null&&(!day(b.completedDay)||b.completedDay>s.day))fail();}
+ for(const b of s.city.buildings){if(typeof b.operating!=='boolean'||!Number.isInteger(b.equipment)||!num(b.equipment,0,2)||b.sourcePolicyId!==null&&!WORLD_EVENTS.some(e=>e.id===b.sourcePolicyId))fail();const original=expected.find(v=>v.id===b.id);if(!original||(['kind','x','y','w','d','height'] as const).some(k=>b[k]!==original[k]))fail();if(!b||!['office','school','factory','art','lab','home','shop'].includes(b.kind)||!['existing','construction','complete'].includes(b.phase)||!Number.isInteger(b.level)||!num(b.level,0,2)||!num(b.progress,0,100)||!num(b.x,0,30)||!num(b.y,0,30)||!num(b.w,1,10)||!num(b.d,1,10)||!num(b.height,1,200)||b.startedDay!==null&&(!day(b.startedDay)||b.startedDay>s.day)||b.completedDay!==null&&(!day(b.completedDay)||b.completedDay>s.day))fail();}
  for(const e of s.city.history)if(!e||!day(e.day)||e.day>s.day||typeof e.text!=='string'||!s.city.buildings.some(b=>b.id===e.buildingId))fail();
  if(!s.rules||Object.keys(INITIAL_RULES).some(k=>!num(s.rules[k as keyof typeof INITIAL_RULES],-.6,1.5)))fail();
  if(!Array.isArray(s.population)||s.population.length<1||s.population.length>300)fail();
+ if(!Array.isArray(s.impacts)||!Array.isArray(s.chains)||!Array.isArray(s.followups))fail();
+ if(new Set(s.impacts.map(e=>e.id)).size!==s.impacts.length||new Set(s.chains.map(e=>e.id)).size!==s.chains.length||new Set(s.followups.map(e=>e.id)).size!==s.followups.length)fail();
+ for(const e of s.impacts)if(!e||typeof e.id!=='string'||typeof e.policyId!=='string'||!day(e.day)||e.day>s.day||!['GLOBAL','NATION','CITY','HUMAN'].includes(e.layer)||!['intended','realized','side-effect','synergy','conflict'].includes(e.kind)||typeof e.text!=='string'||!Array.isArray(e.groups))fail();
+ for(const e of s.chains)if(!e||typeof e.id!=='string'||e.policyId!=='E02'||!num(e.due,0,END_DAY+2000)||!['investment','displacement','returns','adaptation'].includes(e.kind))fail();
+ for(const e of s.followups)if(!e||typeof e.id!=='string'||typeof e.humanId!=='string'||!num(e.due,0,END_DAY+2000)||!['P13','P14','P15'].includes(e.eventId)||typeof e.resolved!=='boolean')fail();
  const ids=new Set<string>();
  for(const h of s.population){
   if(!h||typeof h.id!=='string'||ids.has(h.id)||typeof h.name!=='string'||!Number.isInteger(h.birthDay)||!num(h.birthDay,-50000,END_DAY)||h.ageDays!==(h.alive?s.day:h.deathDay??s.day)-h.birthDay||ageYears(h)<0||typeof h.alive!=='boolean'||typeof h.retired!=='boolean'||!Object.hasOwn(JOBS,h.job)||!Object.hasOwn(JOBS,h.previousJob))fail();ids.add(h.id);
+  if(!Array.isArray(h.itinerary)||h.itinerary.length>5||!Array.isArray(h.speechLog)||h.speechLog.length>30||h.speechLog.some(e=>!e||!day(e.day)||e.day>s.day||typeof e.text!=='string')||!Array.isArray(h.said)||h.said.length>8||h.said.some(x=>typeof x!=='string')||!h.eventContexts||typeof h.eventContexts!=='object'||Object.values(h.eventContexts).some(v=>!Array.isArray(v)||v.some(x=>typeof x!=='string')))fail();
+  for(const stop of h.itinerary)if(!stop||!num(stop.x,0,29)||!num(stop.y,0,29)||!Object.hasOwn(ACTIONS,stop.activity)&&!['shop','home'].includes(stop.activity)||typeof stop.facility!=='string')fail();
+  if(h.speech!==null&&(!h.speech||!day(h.speech.day)||h.speech.day>s.day||typeof h.speech.text!=='string'||!['daily','policy','important'].includes(h.speech.kind)))fail();
   for(const key of ['health','stress','happiness','education','skill','aiSkill','relationships','energy','achievement','jobSecurity'] as const)if(!num(h[key],0,100))fail();
   for(const key of ['income','expenses','assets','workUnits','creativeIncome'] as const)if(!num(h[key]))fail();
   if(!h.traits||Object.values(h.traits).length!==4||Object.values(h.traits).some(v=>!num(v,0,100))||!h.appearance||!num(h.appearance.skin,0,4)||!num(h.appearance.clothing,0,4))fail();

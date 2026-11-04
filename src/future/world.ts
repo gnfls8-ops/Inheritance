@@ -34,7 +34,8 @@ export function economyMonth(s:State,rng:SeededRandom){
   const aiBenefit=h.aiSkill/100*w.access/100;
   const gross=h.employed?base*(.75+w.productivity/180)*(.65+h.skill/140)*clamp(h.workUnits/11,.45,1.6)*(1+aiBenefit*.35+s.city.automation*.001):0;
   const benefits=adult?(h.retired?w.welfare*1.4:!h.employed?w.welfare*1.05:0)+w.productivity*r.dividend:0;
-  h.income=Math.max(0,gross*(1-clamp(.08+r.tax,0,.5))+h.creativeIncome+benefits);
+  const retailOpen=s.city.buildings.find(b=>b.kind==='shop')!.operating;
+  h.income=Math.max(0,gross*(!retailOpen&&['service','business'].includes(h.job)?.55:1)*(1-clamp(.08+r.tax,0,.5))+h.creativeIncome+benefits);
   const housing=adult?140:50;h.expenses=housing*(1+(100-w.environment)*.002+(100-w.equality)*.001)*(1-s.city.transit*.001);
   h.assets+=h.income-h.expenses;h.workUnits=0;h.creativeIncome=0;
   if(h.assets<0)h.stress=clamp(h.stress+5*(1-w.welfare/150));
