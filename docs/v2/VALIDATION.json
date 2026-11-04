@@ -1,0 +1,73 @@
+{
+  "request": "DIRECT-V23",
+  "version": "2.3.0",
+  "completed_at": "2026-11-04T02:03:21.873066+00:00",
+  "build": {
+    "version": "2.3.0",
+    "scenario": "Arcadia 2026–2050",
+    "saveVersion": 23,
+    "buildDate": "2026-11-04",
+    "sourceCommit": "9870e71e90dd9a44784d0a761a121f2f236b19b6",
+    "sourceDirty": false,
+    "builtAt": "2026-11-04T02:00:14.411Z"
+  },
+  "unit": {
+    "numTotalTests": 118,
+    "numPassedTests": 118,
+    "numFailedTests": 0,
+    "success": true
+  },
+  "browser": {
+    "passed": true,
+    "build": "2.3.0",
+    "checks": [
+      "first policy and existing-person assignment",
+      "NPC observation cannot command or switch",
+      "manual learning order",
+      "monthly construction",
+      "IndexedDB exact reload",
+      "legacy slot preserved",
+      "malformed global save rejected",
+      "timelapse pause and final-state separation",
+      "portrait and landscape drawers",
+      "normal 2026–2050 path",
+      "2034/2042 perspectives",
+      "10 unique national events",
+      "real construction/completion history",
+      "ending download exact",
+      "new-game isolation",
+      "offline reload"
+    ],
+    "scenario_seconds": 67.15,
+    "ui_iterations": 106,
+    "policies": 10,
+    "life_records": 3,
+    "city_history": 32,
+    "browser": "Chromium software WebGL",
+    "real_phone": false,
+    "safari": false,
+    "manual_play": false,
+    "js_errors": []
+  },
+  "deployment": {
+    "branch": "gh-pages",
+    "commit": "a58d3299ef79cc1da0ba7a2da26da94eb2888dd0",
+    "url": "https://gnfls8-ops.github.io/Inheritance/?v=2.3.0",
+    "public_http_verification": "blocked by environment proxy CONNECT 403",
+    "workflow_status": "success",
+    "workflow_url": "https://github.com/gnfls8-ops/Inheritance/actions/runs/41758105430",
+    "commit_match_verified": true,
+    "checkout_matches_tested_dist": true
+  },
+  "limitations": [
+    "temporary original pixel-style art",
+    "real phone untested",
+    "Safari untested",
+    "manual play feedback not collected"
+  ],
+  "automatic_loop": "disabled",
+  "distribution": {
+    "total_bytes": 1042598,
+    "index_sha256": "62b592cfbe21b602950db99570656c61c5a80a3a500c8891706b26d724a7f201"
+  }
+}
