@@ -1,7 +1,6 @@
 import {readFile,writeFile,readdir} from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-const release=JSON.parse(await readFile('dist/release.json','utf8'));release.sourceCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();release.sourceDirty=!!execFileSync('git',['status','--porcelain','--','src','public','scripts','package.json','package-lock.json','vite.config.ts'],{encoding:'utf8'}).trim();release.builtAt=new Date().toISOString();await writeFile('dist/release.json',JSON.stringify(release,null,2)+'\n');
+const release=JSON.parse(await readFile('dist/release.json','utf8'));release.sourceCommit=process.env.INHERITANCE_SOURCE_COMMIT??null;release.sourceDirty=process.env.INHERITANCE_SOURCE_DIRTY===undefined?null:process.env.INHERITANCE_SOURCE_DIRTY==='true';release.builtAt=new Date().toISOString();await writeFile('dist/release.json',JSON.stringify(release,null,2)+'\n');
 const index=await readFile('dist/index.html','utf8'),assets=(await readdir('dist/assets')).map(x=>'./assets/'+x),files=['./','./index.html','./release.json',...assets];
 const hash=createHash('sha256').update(index).digest('hex').slice(0,12);
 await writeFile('dist/sw.js',`const CACHE='inheritance-future-${hash}';const FILES=${JSON.stringify(files)};
